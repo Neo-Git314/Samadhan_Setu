@@ -16,7 +16,12 @@ const app = express();
 const port = Number(process.env.PORT) || 5000;
 
 // TODO: Harden middleware stack with rate-limits, logging, and observability.
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
+const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
