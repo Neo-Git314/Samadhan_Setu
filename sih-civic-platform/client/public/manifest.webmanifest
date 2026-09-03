@@ -1,0 +1,10 @@
+{
+  "name": "Samadhan Setu",
+  "short_name": "SamadhanSetu",
+  "description": "TODO: Define PWA manifest details.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": []
+}

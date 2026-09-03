@@ -1,0 +1,5 @@
+# TODO: Ignore local build and dependency artifacts
+node_modules/
+dist/
+.env
+.DS_Store
