@@ -3,7 +3,7 @@ import axios from 'axios';
 // Central Axios client
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 30000
+  timeout: 60000
 });
 
 // Request interceptor: attach JWT token
@@ -67,9 +67,9 @@ export const complaintsApi = {
     return res.data;
   },
   createComplaint: async (data) => {
-    // If FormData, let browser handle Content-Type (multipart/form-data)
-    const headers = data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {};
-    const res = await api.post('/complaints', data, { headers });
+    // Note: Do not manually set Content-Type for FormData.
+    // Axios automatically sets 'multipart/form-data; boundary=...' which Multer requires.
+    const res = await api.post('/complaints', data);
     return res.data;
   },
   updateStatus: async (id, status) => {

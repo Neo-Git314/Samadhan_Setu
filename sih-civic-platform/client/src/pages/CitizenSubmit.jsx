@@ -205,7 +205,8 @@ export default function CitizenSubmit() {
       }
     } catch (err) {
       console.error('[CitizenSubmit] Submission failure:', err);
-      showToast(`Submission failed: ${err.message}`, 'error');
+      const errorMsg = err.response?.data?.message || err.message || 'Submission failed';
+      showToast(`Submission failed: ${errorMsg}`, 'error');
     } finally {
       setIsSubmitting(false);
     }

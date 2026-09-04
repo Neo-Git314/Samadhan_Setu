@@ -51,7 +51,7 @@ function Navbar() {
             </span>
             <span className="hidden md:inline text-surface-container-highest">|</span>
             <span className="hidden md:inline text-xs text-secondary/90">
-              {t('ministry_title', 'Department of Information Technology & e-Governance, Govt. of Jharkhand')}
+              {t('ministry_title', 'Department of Higher & Technical Education')}
             </span>
           </div>
 

@@ -4,7 +4,7 @@ export const translations = {
   en: {
     // Top Bar & Utility
     goi_top: "Government of Jharkhand",
-    ministry_title: "Department of Information Technology & e-Governance, Govt. of Jharkhand",
+    ministry_title: "Department of Higher & Technical Education",
     skip_to_content: "Skip to main content",
     sub_brand: "Government of Jharkhand • Grievance Redressal & Innovation Bridge",
     

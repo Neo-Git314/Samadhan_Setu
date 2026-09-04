@@ -12,8 +12,8 @@ import { upload } from '../middleware/upload.js';
 
 const router = Router();
 
-// Citizens create complaints with optional image uploads (max 5)
-router.post('/', auth, requireRole(['citizen']), upload.array('images', 5), createComplaint);
+// Citizens & Admins create complaints with optional image uploads (max 5)
+router.post('/', auth, requireRole(['citizen', 'admin']), upload.array('images', 5), createComplaint);
 
 // List complaints with role-based access & query filters
 router.get('/', auth, getComplaints);
