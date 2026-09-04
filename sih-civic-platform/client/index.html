@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Samadhan Setu - Government of Jharkhand | Citizen Grievance Redressal & Innovation Platform</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "tertiary-fixed": "#6ffbbe",
+            "tertiary-container": "#00b07a",
+            "primary-fixed-dim": "#ffb690",
+            "on-surface": "#dae2fd",
+            "secondary": "#94a3b8",
+            "surface-dim": "#0b1326",
+            "secondary-container": "#1e293b",
+            "secondary-fixed": "#d8e3fb",
+            "inverse-surface": "#dae2fd",
+            "inverse-on-surface": "#283044",
+            "on-secondary-fixed": "#111c2d",
+            "outline": "#475569",
+            "tertiary-fixed-dim": "#4edea3",
+            "surface-container-highest": "#334155",
+            "outline-variant": "#475569",
+            "surface-bright": "#1e293b",
+            "on-secondary-container": "#e2e8f0",
+            "on-primary-fixed-variant": "#783200",
+            "secondary-fixed-dim": "#bcc7de",
+            "tertiary": "#4edea3",
+            "background": "#090e1a",
+            "surface-container-high": "#1a2234",
+            "on-primary-fixed": "#341100",
+            "error-container": "#7f1d1d",
+            "on-secondary": "#1e293b",
+            "on-tertiary-container": "#022c22",
+            "surface-container-low": "#0f172a",
+            "on-background": "#f8fafc",
+            "on-primary": "#ffffff",
+            "primary-container": "#ff6f00",
+            "on-tertiary": "#003824",
+            "on-error-container": "#fecaca",
+            "on-tertiary-fixed": "#002113",
+            "surface": "#090e1a",
+            "inverse-primary": "#ea580c",
+            "surface-tint": "#ff6f00",
+            "on-error": "#ffffff",
+            "primary-fixed": "#ffedd5",
+            "primary": "#fb923c",
+            "on-tertiary-fixed-variant": "#005236",
+            "surface-container-lowest": "#060a12",
+            "on-primary-container": "#ffffff",
+            "error": "#f87171",
+            "on-surface-variant": "#cbd5e1",
+            "surface-variant": "#1e293b",
+            "surface-container": "#131d31",
+            "on-secondary-fixed-variant": "#3c475a"
+          },
+          maxWidth: {
+            "container-max": "1320px"
+          },
+          fontFamily: {
+            sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+            "code-num": ["Inter", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+      vertical-align: middle;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090e1a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ff6f00; }
+    
+    body {
+      background-color: #090e1a;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-white dark">
+  <div id="root" class="flex-1 flex flex-col min-h-screen"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

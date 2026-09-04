@@ -188,21 +188,148 @@ export const mockProjects = [
     _id: "p3001",
     complaintId: "c2001",
     universityId: "uni501",
+    title: "Inline Turbidity Filtration & Activated Carbon Skid",
+    domain: "Water Purification",
+    description: "Rapid-deployment multi-stage inline filtration skid featuring activated coconut carbon matrix, UV-C germicidal irradiation, and real-time NTU telemetry for contaminated municipal pipelines in Ward 12.",
+    grantAmount: "₹ 2,50,000",
+    leadName: "Dr. Anita Sharma",
+    progress: "65% Complete",
     team: [
-      { name: "Priya Verma", role: "student" },
-      { name: "Dr. Anita Sharma", role: "faculty_mentor" },
+      { name: "Dr. Anita Sharma", role: "Principal Investigator (PI)", dept: "Dept of Environmental Engineering" },
+      { name: "Rohan Verma", role: "Student Capstone Lead", dept: "B.Tech Chemical Engg" },
+      { name: "Pooja Iyer", role: "Embedded IoT Researcher", dept: "B.Tech ECE" }
     ],
     industryPartnerId: "ind701",
-    status: "in_progress", // proposed | approved | in_progress | testing | completed
+    industryPartnerName: "EcoSolve Technologies Pvt Ltd",
+    status: "in_progress",
     milestones: [
-      { _id: "m1", title: "Site survey & diagnosis", dueDate: "2026-02-10T00:00:00.000Z", status: "done" },
-      { _id: "m2", title: "Prototype repair kit design", dueDate: "2026-02-20T00:00:00.000Z", status: "pending" },
-      { _id: "m3", title: "Field deployment & testing", dueDate: "2026-03-01T00:00:00.000Z", status: "pending" },
+      {
+        _id: "m1",
+        title: "Problem Framing & Sample Lab Assay",
+        status: "completed",
+        date: "Jan 2026",
+        desc: "Baseline water chemistry testing and heavy metal spectroscopy for Ward 12 pipeline."
+      },
+      {
+        _id: "m2",
+        title: "Prototype Inline Filtration Skid Build",
+        status: "in_progress",
+        date: "Feb 2026",
+        desc: "Fabrication of 4-stage activated carbon cartridge and automated backwash assembly."
+      },
+      {
+        _id: "m3",
+        title: "Field Pilot Deployment & IoT Telemetry",
+        status: "pending",
+        date: "Mar 2026",
+        desc: "Pumping station junction installation with cellular telemetry for real-time NTU logging."
+      },
+      {
+        _id: "m4",
+        title: "Municipal Handover & Final Dossier",
+        status: "pending",
+        date: "Apr 2026",
+        desc: "Official sign-off with Drinking Water & Sanitation Dept (DWSD) and CSR funding partner."
+      }
     ],
     proposalDoc: "https://res.cloudinary.com/demo/raw/upload/v1/proposal_p3001.pdf",
-    createdAt: "2026-02-04T10:00:00.000Z",
-    updatedAt: "2026-02-08T16:00:00.000Z",
+    createdAt: "2026-01-15T10:00:00.000Z",
+    updatedAt: "2026-02-08T16:00:00.000Z"
   },
+  {
+    _id: "p3002",
+    complaintId: "c2004",
+    universityId: "uni502",
+    title: "Autonomous Solar Drainage Desilting Rover",
+    domain: "Environmental Sanitation",
+    description: "Compact crawler bot equipped with hydraulic auger for desilting blocked culverts and open monsoon drains without manual human entry.",
+    grantAmount: "₹ 4,00,000",
+    leadName: "Prof. S. K. Mahato",
+    progress: "30% Complete",
+    team: [
+      { name: "Prof. S. K. Mahato", role: "Faculty Mentor", dept: "Dept of Mechanical Engg" },
+      { name: "Aditya Roy", role: "Robotics Lead", dept: "B.Tech Mechatronics" }
+    ],
+    industryPartnerId: "ind701",
+    industryPartnerName: "EcoSolve Technologies Pvt Ltd",
+    status: "in_progress",
+    milestones: [
+      {
+        _id: "m201",
+        title: "Mechanical CAD & Torque Optimization",
+        status: "completed",
+        date: "Jan 2026",
+        desc: "3D stress simulation for amphibious track drive in high-viscosity sludge."
+      },
+      {
+        _id: "m202",
+        title: "Hydraulic Auger & Motor Testing",
+        status: "in_progress",
+        date: "Feb 2026",
+        desc: "Bench test of 1.2kW brushless submersible motor with silt grinding blade."
+      },
+      {
+        _id: "m203",
+        title: "Corridor Field Desilting Trials",
+        status: "pending",
+        date: "Mar 2026",
+        desc: "Live testing in Bistupur municipal culvert under UDHD supervision."
+      },
+      {
+        _id: "m204",
+        title: "Municipal Scalability Documentation",
+        status: "pending",
+        date: "Apr 2026",
+        desc: "Manufacturing blueprint handover to Urban Development Dept."
+      }
+    ],
+    proposalDoc: "https://res.cloudinary.com/demo/raw/upload/v1/proposal_p3002.pdf",
+    createdAt: "2026-01-20T10:00:00.000Z",
+    updatedAt: "2026-02-06T12:00:00.000Z"
+  },
+  {
+    _id: "p3003",
+    complaintId: "c2003",
+    universityId: "uni501",
+    title: "Distribution Transformer IoT Thermal Telemetry Unit",
+    domain: "Grid IoT Systems",
+    description: "Substation IoT clip-on sensor pack for real-time coil temperature, oil level, and harmonic distortion telemetry to prevent transformer spark blowouts.",
+    grantAmount: "₹ 3,20,000",
+    leadName: "Dr. Ramesh Soren",
+    progress: "50% Complete",
+    team: [
+      { name: "Dr. Ramesh Soren", role: "Project Director", dept: "Dept of Electrical & Electronics" }
+    ],
+    industryPartnerId: "ind701",
+    industryPartnerName: "EcoSolve Technologies Pvt Ltd",
+    status: "in_progress",
+    milestones: [
+      {
+        _id: "m301",
+        title: "Sensor Circuitry & RF Antenna Prototype",
+        status: "completed",
+        date: "Jan 2026",
+        desc: "PCB fabrication of 4-channel thermocouple module with LoRaWAN antenna."
+      },
+      {
+        _id: "m302",
+        title: "DISCOM Substation Live Calibration",
+        status: "in_progress",
+        date: "Feb 2026",
+        desc: "Calibration on Lalpur Chowk 11kV distribution transformer with JBVNL."
+      },
+      {
+        _id: "m303",
+        title: "Cloud SCADA Integration & SMS Alerts",
+        status: "pending",
+        date: "Mar 2026",
+        desc: "Threshold alert dispatch to JBVNL control room upon phase imbalance."
+      }
+    ],
+    proposalDoc: "https://res.cloudinary.com/demo/raw/upload/v1/proposal_p3003.pdf",
+    createdAt: "2026-01-25T10:00:00.000Z",
+    updatedAt: "2026-02-07T14:00:00.000Z"
+  }
 ];
 
 // ---------- NOTIFICATION (Task 13) ----------
