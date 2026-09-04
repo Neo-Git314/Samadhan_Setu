@@ -11,7 +11,7 @@ const PERSONAS = [
     titleEn: 'Citizen Portal',
     descEn: 'File grievances across Jharkhand, upload geotagged proof, and track SLA resolution progress.',
     icon: 'person',
-    email: 'rajesh.kumar.civic@jharkhand.gov.in',
+    email: 'rahul.kumar@gmail.com',
     badgeColor: 'bg-primary-container/20 text-primary border-primary-container/40'
   },
   {
@@ -19,7 +19,7 @@ const PERSONAS = [
     titleEn: 'University Innovation Hub',
     descEn: 'Bid on Jharkhand civic engineering challenges and develop capstone solutions with state institutions.',
     icon: 'school',
-    email: 'anita@bitmesra.ac.in',
+    email: 'university@bitmesra.ac.in',
     badgeColor: 'bg-tertiary-container/20 text-tertiary border-tertiary-container/40'
   },
   {
@@ -27,7 +27,7 @@ const PERSONAS = [
     titleEn: 'Industry Partner Portal',
     descEn: 'Co-fund high-impact municipal solutions in Jharkhand and manage CSR grant capital under MCA Section 135.',
     icon: 'corporate_fare',
-    email: 'partnerships@ecosolve.in',
+    email: 'contact@ecosolve.in',
     badgeColor: 'bg-secondary-container text-on-surface border-secondary/40'
   },
   {
@@ -35,20 +35,20 @@ const PERSONAS = [
     titleEn: 'Nodal Officer & Admin',
     descEn: 'AI triage matrix, Jharkhand district SLA analytics, and state academic assignments.',
     icon: 'admin_panel_settings',
-    email: 'nodal.director@jharkhand.gov.in',
+    email: 'admin@samadhan.gov.in',
     badgeColor: 'bg-primary-container text-white border-primary'
   }
 ];
 
 function AuthPage() {
-  const { login } = useAuth();
+  const { login, switchPersona } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [selectedRole, setSelectedRole] = useState('citizen');
-  const [email, setEmail] = useState('rajesh.kumar.civic@jharkhand.gov.in');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('rahul.kumar@gmail.com');
+  const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [captchaAnswer, setCaptchaAnswer] = useState('42');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,21 +56,34 @@ function AuthPage() {
   const handleRoleSelect = (persona) => {
     setSelectedRole(persona.role);
     setEmail(persona.email);
+    setPassword('password123');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      login(selectedRole, { email });
+    try {
+      // Try real login with email and password
+      const loggedUser = await login(email, password);
       showToast(
-        `Signed in successfully to ${selectedRole.toUpperCase()} Portal`,
+        `Signed in successfully to ${loggedUser.role?.toUpperCase() || selectedRole.toUpperCase()} Portal`,
         'success'
       );
+      navigate(getRoleDefaultRoute(loggedUser.role || selectedRole));
+    } catch (err) {
+      // If direct login fails, try switchPersona fallback
+      console.warn('Direct login failed, attempting persona switch:', err.message);
+      try {
+        const switched = await switchPersona(selectedRole);
+        showToast(`Signed in to ${selectedRole.toUpperCase()} Portal`, 'success');
+        navigate(getRoleDefaultRoute(switched?.role || selectedRole));
+      } catch (innerErr) {
+        showToast(`Login failed: ${err.message}`, 'error');
+      }
+    } finally {
       setIsSubmitting(false);
-      navigate(getRoleDefaultRoute(selectedRole));
-    }, 400);
+    }
   };
 
   return (

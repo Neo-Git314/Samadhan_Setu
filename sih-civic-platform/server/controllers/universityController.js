@@ -77,7 +77,14 @@ export async function createUniversity(req, res, next) {
  */
 export async function getUniversityChallenges(req, res, next) {
   try {
-    const universityId = req.params.id;
+    let universityId = req.params.id;
+    if (universityId === 'me') {
+      const uni = await University.findOne({ userId: req.user.id });
+      if (!uni) {
+        return res.status(200).json({ success: true, challenges: [] });
+      }
+      universityId = uni._id;
+    }
 
     const complaints = await Complaint.find({
       'suggestedUniversities.universityId': universityId,
@@ -101,9 +108,22 @@ export async function getUniversityChallenges(req, res, next) {
  */
 export async function acceptComplaintChallenge(req, res, next) {
   try {
-    const { id: universityId, complaintId } = req.params;
+    let { id: universityId, complaintId } = req.params;
 
-    const university = await University.findById(universityId);
+    let university;
+    if (universityId === 'me') {
+      university = await University.findOne({ userId: req.user.id });
+      if (!university) {
+        return res.status(404).json({
+          success: false,
+          message: 'University profile not found for user'
+        });
+      }
+      universityId = university._id;
+    } else {
+      university = await University.findById(universityId);
+    }
+
     if (!university) {
       return res.status(404).json({
         success: false,

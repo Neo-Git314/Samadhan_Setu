@@ -1,21 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { projectsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 
-function IndustryProfile() {
+export default function IndustryProfile() {
   const { user } = useAuth();
-  const { t } = useLanguage();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [companyName, setCompanyName] = useState(
     user?.organization || 'EcoSolve Technologies Pvt Ltd'
   );
-  const [cin, setCin] = useState('L29100PN1980PLC023456');
+  const [cin, setCin] = useState('L29100JH1980PLC023456');
   const [csrBudget, setCsrBudget] = useState('₹ 35,00,000');
   const [sectorFocus, setSectorFocus] = useState(
     'Water Purification Systems, Clean Energy & IoT Municipal Sensor Telemetry'
   );
+  const [activeProjects, setActiveProjects] = useState([]);
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const res = await projectsApi.getProjects({ industryPartnerId: 'me' });
+        if (res && res.success) {
+          setActiveProjects(res.projects || []);
+        }
+      } catch (_e) {}
+    }
+    loadProjects();
+  }, []);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -31,7 +45,7 @@ function IndustryProfile() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-on-surface">
-              {t('nav_industry_profile', 'Corporate & Industry Partner Profile')}
+              Corporate & Industry Partner Profile
             </h1>
             <p className="text-xs sm:text-sm text-secondary mt-0.5">
               Corporate Social Responsibility (CSR) & Innovation Co-Funding Credentials
@@ -78,7 +92,7 @@ function IndustryProfile() {
             <label className="block text-xs font-semibold text-secondary mb-1.5">MCA Corporate Registry Verification</label>
             <div className="px-4 py-2.5 bg-surface-container rounded-xl border border-surface-container-highest flex items-center justify-between">
               <span className="text-on-surface text-sm font-semibold">Ministry of Corporate Affairs (MCA)</span>
-              <span className="px-2.5 py-0.5 bg-[#003b26] text-[#6ffbbe] text-xs font-bold rounded-full">Compliant</span>
+              <span className="px-2.5 py-0.5 bg-[#003b26] text-[#6ffbbe] text-xs font-bold rounded-full">Compliant (Sec 135)</span>
             </div>
           </div>
         </div>
@@ -93,6 +107,30 @@ function IndustryProfile() {
           />
         </div>
 
+        {/* Active Funded Projects */}
+        <div className="pt-2 border-t border-surface-container-highest space-y-3">
+          <h3 className="text-sm font-bold text-on-surface">Active Funded Academic R&D Projects</h3>
+          {activeProjects.length > 0 ? (
+            <div className="space-y-2">
+              {activeProjects.map((p) => (
+                <div
+                  key={p._id}
+                  onClick={() => navigate(`/university/projects/${p._id}`)}
+                  className="p-3 bg-surface-container hover:bg-surface-container-high rounded-xl border border-surface-container-highest flex justify-between items-center cursor-pointer transition-colors text-xs"
+                >
+                  <div className="truncate">
+                    <strong className="text-on-surface block truncate">{p.complaintId?.title || 'Applied Technology R&D'}</strong>
+                    <span className="text-secondary text-[11px]">{p.universityId?.name}</span>
+                  </div>
+                  <span className="text-xs text-primary font-bold">Inspect &gt;</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-secondary">No co-funded projects currently under execution.</p>
+          )}
+        </div>
+
         <div className="flex justify-end pt-2">
           <button
             type="submit"
@@ -105,5 +143,3 @@ function IndustryProfile() {
     </div>
   );
 }
-
-export default IndustryProfile;

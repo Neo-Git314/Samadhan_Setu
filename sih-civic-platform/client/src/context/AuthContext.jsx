@@ -1,125 +1,211 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import { authApi } from '../api/client';
 
 const AuthContext = createContext(null);
 
-export const DEFAULT_USERS_BY_ROLE = {
+export const SEEDED_CREDENTIALS = {
+  admin: {
+    email: 'admin@samadhan.gov.in',
+    password: 'password123',
+    fallbackUser: {
+      _id: 'seed_admin_1',
+      name: 'Nodal Officer Rajesh Varma',
+      email: 'admin@samadhan.gov.in',
+      role: 'admin',
+      phone: '+91 9000000000',
+      organization: 'Department of IT & e-Governance, Govt. of Jharkhand'
+    }
+  },
   citizen: {
-    _id: 'u1001',
-    name: 'Rajesh Kumar',
-    email: 'rajesh.kumar.civic@jharkhand.gov.in',
-    role: 'citizen',
-    phone: '+91 98765 43210',
-    district: 'Ranchi',
-    state: 'Jharkhand'
+    email: 'rahul.kumar@gmail.com',
+    password: 'password123',
+    fallbackUser: {
+      _id: 'seed_citizen_1',
+      name: 'Rahul Kumar',
+      email: 'rahul.kumar@gmail.com',
+      role: 'citizen',
+      phone: '+91 9876543210',
+      organization: 'Angara Gram Panchayat, Ranchi'
+    }
   },
   university: {
-    _id: 'u1002',
-    name: 'Dr. Anita Sharma',
-    email: 'anita@bitmesra.ac.in',
-    role: 'university',
-    phone: '+91 91234 56780',
-    organization: 'Birla Institute of Technology (BIT), Mesra, Ranchi',
-    aisheCode: 'U-0120'
+    email: 'university@bitmesra.ac.in',
+    password: 'password123',
+    fallbackUser: {
+      _id: 'seed_uni_1',
+      name: 'Dr. Anita Sharma (PI)',
+      email: 'university@bitmesra.ac.in',
+      role: 'university',
+      phone: '+91 9123456780',
+      organization: 'Birla Institute of Technology (BIT), Mesra, Ranchi'
+    }
   },
   industry: {
-    _id: 'u1003',
-    name: 'Suresh Singh',
-    email: 'partnerships@ecosolve.in',
-    role: 'industry',
-    phone: '+91 99887 76655',
-    organization: 'EcoSolve Technologies Pvt Ltd (Jharkhand CSR Partner)',
-    cin: 'L29100JH1980PLC023456'
-  },
-  admin: {
-    _id: 'u1004',
-    name: 'Officer Rajesh Varma',
-    email: 'nodal.director@jharkhand.gov.in',
-    role: 'admin',
-    phone: '+91 90000 00000',
-    organization: 'Government of Jharkhand',
-    department: 'Department of IT & e-Governance (JAP-IT)'
+    email: 'contact@ecosolve.in',
+    password: 'password123',
+    fallbackUser: {
+      _id: 'seed_ind_1',
+      name: 'Suresh Patel (CSR Lead)',
+      email: 'contact@ecosolve.in',
+      role: 'industry',
+      phone: '+91 9988776655',
+      organization: 'EcoSolve Technologies Pvt Ltd'
+    }
   }
 };
 
+export const DEFAULT_USERS_BY_ROLE = {
+  citizen: SEEDED_CREDENTIALS.citizen.fallbackUser,
+  university: SEEDED_CREDENTIALS.university.fallbackUser,
+  industry: SEEDED_CREDENTIALS.industry.fallbackUser,
+  admin: SEEDED_CREDENTIALS.admin.fallbackUser
+};
+
 export function AuthProvider({ children }) {
+  const [token, setToken] = useState(() => {
+    return localStorage.getItem('token') || localStorage.getItem('samadhan_token') || null;
+  });
+
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('samadhan_user');
-      if (savedUser) {
-        return JSON.parse(savedUser);
+      if (savedUser) return JSON.parse(savedUser);
+    } catch (_e) {}
+    return SEEDED_CREDENTIALS.citizen.fallbackUser;
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Hydrate user profile on initial mount via GET /api/auth/me
+  useEffect(() => {
+    let isMounted = true;
+
+    async function hydrate() {
+      const currentToken = localStorage.getItem('token') || localStorage.getItem('samadhan_token');
+      if (!currentToken) {
+        setIsLoading(false);
+        return;
       }
-    } catch (e) {
-      console.error('Failed to parse saved user:', e);
+
+      try {
+        const res = await authApi.getMe();
+        if (isMounted && res && res.success && res.user) {
+          setUser(res.user);
+          localStorage.setItem('samadhan_user', JSON.stringify(res.user));
+        }
+      } catch (err) {
+        console.warn('[AuthContext] Session hydration error, using cached session:', err.message);
+        // If 401, client interceptor already handled redirect/clear
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
-    return DEFAULT_USERS_BY_ROLE.citizen;
-  });
 
-  const [token, setToken] = useState(() => {
-    return localStorage.getItem('samadhan_token') || 'demo_jwt_token_auth_valid';
-  });
+    hydrate();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const isAuthenticated = Boolean(user && token);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('samadhan_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('samadhan_user');
+  const login = async (email, password) => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.login(email, password);
+      if (res && res.token && res.user) {
+        setToken(res.token);
+        setUser(res.user);
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('samadhan_token', res.token);
+        localStorage.setItem('samadhan_user', JSON.stringify(res.user));
+        return res.user;
+      }
+      throw new Error('Login failed: Invalid server response');
+    } catch (err) {
+      console.error('[AuthContext] Login error:', err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
-  }, [user]);
+  };
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('samadhan_token', token);
-    } else {
-      localStorage.removeItem('samadhan_token');
+  const register = async (userData) => {
+    setIsLoading(true);
+    try {
+      const res = await authApi.register(userData);
+      if (res && res.token && res.user) {
+        setToken(res.token);
+        setUser(res.user);
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('samadhan_token', res.token);
+        localStorage.setItem('samadhan_user', JSON.stringify(res.user));
+        return res.user;
+      }
+      throw new Error('Registration failed');
+    } catch (err) {
+      console.error('[AuthContext] Register error:', err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
-  }, [token]);
-
-  const login = (role, customData = {}) => {
-    const roleUser = DEFAULT_USERS_BY_ROLE[role] || DEFAULT_USERS_BY_ROLE.citizen;
-    const finalUser = { ...roleUser, ...customData, role };
-    const newToken = `jwt_token_${role}_${Date.now()}`;
-
-    setUser(finalUser);
-    setToken(newToken);
-    localStorage.setItem('samadhan_user', JSON.stringify(finalUser));
-    localStorage.setItem('samadhan_token', newToken);
-
-    return finalUser;
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('samadhan_user');
+    localStorage.removeItem('token');
     localStorage.removeItem('samadhan_token');
+    localStorage.removeItem('samadhan_user');
   };
 
-  const switchRoleDev = (newRole) => {
-    if (DEFAULT_USERS_BY_ROLE[newRole]) {
-      const switchedUser = DEFAULT_USERS_BY_ROLE[newRole];
-      const newToken = `jwt_token_${newRole}_${Date.now()}`;
-      setUser(switchedUser);
-      setToken(newToken);
-      localStorage.setItem('samadhan_user', JSON.stringify(switchedUser));
-      localStorage.setItem('samadhan_token', newToken);
-      return switchedUser;
+  // Evaluation persona switcher: auto-authenticates against /api/auth/login
+  const switchPersona = useCallback(async (roleKey) => {
+    const creds = SEEDED_CREDENTIALS[roleKey];
+    if (!creds) return null;
+
+    setIsLoading(true);
+    try {
+      const res = await authApi.login(creds.email, creds.password);
+      if (res && res.token && res.user) {
+        setToken(res.token);
+        setUser(res.user);
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('samadhan_token', res.token);
+        localStorage.setItem('samadhan_user', JSON.stringify(res.user));
+        return res.user;
+      }
+    } catch (err) {
+      console.warn(`[AuthContext] Live login failed for ${roleKey}, using seeded fallback:`, err.message);
+      // Fallback for offline demo safety
+      const fallback = creds.fallbackUser;
+      const dummyToken = `demo_token_${roleKey}_${Date.now()}`;
+      setToken(dummyToken);
+      setUser(fallback);
+      localStorage.setItem('token', dummyToken);
+      localStorage.setItem('samadhan_token', dummyToken);
+      localStorage.setItem('samadhan_user', JSON.stringify(fallback));
+      return fallback;
+    } finally {
+      setIsLoading(false);
     }
-    return user;
-  };
+  }, []);
+
+  // Backwards compatibility alias
+  const switchRoleDev = switchPersona;
 
   const value = useMemo(
     () => ({
       user,
       token,
-      isAuthenticated,
+      isAuthenticated: Boolean(token && user),
+      isLoading,
       login,
+      register,
       logout,
+      switchPersona,
       switchRoleDev,
       setUser
     }),
-    [user, token, isAuthenticated]
+    [user, token, isLoading, switchPersona]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -36,12 +36,44 @@ async function seed() {
 
     const [citizenUser, universityUser, industryUser, adminUser] = await User.create([
       {
-        name: 'Ravi Kumar',
-        email: 'ravi.citizen@example.com',
+        name: 'Rahul Kumar',
+        email: 'rahul.kumar@gmail.com',
         passwordHash,
         role: 'citizen',
         phone: '+91 9876543210',
-        organization: 'Angara Gram Panchayat'
+        organization: 'Angara Gram Panchayat, Ranchi'
+      },
+      {
+        name: 'Dr. Anita Sharma (PI)',
+        email: 'university@bitmesra.ac.in',
+        passwordHash,
+        role: 'university',
+        phone: '+91 9123456780',
+        organization: 'Birla Institute of Technology (BIT), Mesra, Ranchi'
+      },
+      {
+        name: 'Suresh Patel (CSR Lead)',
+        email: 'contact@ecosolve.in',
+        passwordHash,
+        role: 'industry',
+        phone: '+91 9988776655',
+        organization: 'EcoSolve Technologies Pvt Ltd'
+      },
+      {
+        name: 'Nodal Officer Rajesh Varma',
+        email: 'admin@samadhan.gov.in',
+        passwordHash,
+        role: 'admin',
+        phone: '+91 9000000000',
+        organization: 'Department of IT & e-Governance, Govt. of Jharkhand'
+      },
+      {
+        name: 'Ravi Kumar (Citizen)',
+        email: 'ravi.citizen@example.com',
+        passwordHash,
+        role: 'citizen',
+        phone: '+91 9876543219',
+        organization: 'Ranchi Municipal Corporation'
       },
       {
         name: 'Dr. Anita Sharma',
@@ -68,7 +100,7 @@ async function seed() {
         organization: 'Jharkhand State Urban Development Agency'
       }
     ]);
-    console.log('[Seeder] 4 users created successfully.');
+    console.log('[Seeder] Evaluation persona users created successfully.');
 
     // 3. Create sample University linked to universityUser
     console.log('[Seeder] Creating sample University profile (BIT Mesra)...');
@@ -235,11 +267,11 @@ async function seed() {
     console.log('\n====================================================');
     console.log('✅ DATABASE SEEDING COMPLETED SUCCESSFULLY!');
     console.log('====================================================');
-    console.log('Seeded Users:');
-    console.log('  1. Citizen:    ravi.citizen@example.com   | password: password123');
-    console.log('  2. University: anita@bitmesra.ac.in       | password: password123');
-    console.log('  3. Industry:   suresh@ecosolve.in         | password: password123');
-    console.log('  4. Admin:      admin@platform.gov.in      | password: password123');
+    console.log('Evaluation Persona Seed Accounts:');
+    console.log('  1. Citizen:    rahul.kumar@gmail.com      | password: password123');
+    console.log('  2. University: university@bitmesra.ac.in  | password: password123');
+    console.log('  3. Industry:   contact@ecosolve.in        | password: password123');
+    console.log('  4. Admin:      admin@samadhan.gov.in      | password: password123');
     console.log('====================================================\n');
   } catch (error) {
     console.error('[Seeder] Error during database seeding:', error);

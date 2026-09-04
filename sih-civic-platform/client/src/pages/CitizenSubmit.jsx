@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useData } from '../context/DataContext';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import { complaintsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 
 const CATEGORIES = [
@@ -12,6 +13,12 @@ const CATEGORIES = [
   'Solid Waste & Sanitation',
   'Public Health & Vector Control',
   'Street Lighting & Pedestrian Safety'
+];
+
+const SUBMITTER_PERSONAS = [
+  { id: 'individual', label: 'Individual Citizen', icon: 'person', desc: 'Private resident filing for personal or neighborhood concern' },
+  { id: 'pri', label: 'Panchayati Raj Institution (PRI)', icon: 'holiday_village', desc: 'Gram Panchayat Mukhiya, Ward Member, or Block Representative' },
+  { id: 'ulb', label: 'Urban Local Body (ULB)', icon: 'location_city', desc: 'Municipal Corporation, Municipality, or Notified Area Committee' }
 ];
 
 const JHARKHAND_DISTRICTS = [
@@ -37,121 +44,187 @@ const JHARKHAND_DEPARTMENTS = [
 ];
 
 const URGENCIES = [
-  { value: 'Critical Life Safety (SLA: 12 Hours)', labelEn: 'Critical Life Safety (12h SLA)', desc: 'Immediate contamination, open high-voltage sparks, structural hazard' },
-  { value: 'High Urgency (SLA: 48 Hours)', labelEn: 'High Priority (48h SLA)', desc: 'Blocked main drainage culvert, trench excavation without barriers' },
-  { value: 'Standard (SLA: 5 Days)', labelEn: 'Standard Redressal (5 Days SLA)', desc: 'Garbage accumulation, routine road patch repairs' }
+  { value: 'Critical 12h', dbUrgency: 'high', labelEn: 'Critical 12h SLA', desc: 'Immediate contamination, open high-voltage sparks, structural collapse' },
+  { value: 'High 48h', dbUrgency: 'high', labelEn: 'High Priority 48h SLA', desc: 'Blocked main drainage culvert, trench excavation without barriers' },
+  { value: 'Standard 5-day', dbUrgency: 'medium', labelEn: 'Standard 5-day SLA', desc: 'Garbage accumulation, routine road patch repairs' }
 ];
 
-function CitizenSubmit() {
-  const { addComplaint } = useData();
+// Custom pin for map picker
+const PIN_ICON = L.divIcon({
+  className: 'custom-pin',
+  html: `
+    <div style="
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      background: #ff6f00;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    ">
+      <div style="width: 10px; height: 10px; background: #ffffff; border-radius: 50%;"></div>
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 32]
+});
+
+// Map click listener component
+function MapClickHandler({ position, onPositionChange }) {
+  useMapEvents({
+    click(e) {
+      onPositionChange(e.latlng.lat, e.latlng.lng);
+    }
+  });
+  return position ? <Marker position={position} icon={PIN_ICON} /> : null;
+}
+
+export default function CitizenSubmit() {
   const { user } = useAuth();
-  const { t } = useLanguage();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Form State
-  const [title, setTitle] = useState('');
+  // Step 1: Submitter Persona & Category
+  const [submitterType, setSubmitterType] = useState('individual');
   const [category, setCategory] = useState(CATEGORIES[0]);
-  const [urgency, setUrgency] = useState(URGENCIES[0].value);
-  const [department, setDepartment] = useState(JHARKHAND_DEPARTMENTS[0]);
-  const [description, setDescription] = useState('');
 
-  // Location State
-  const [state] = useState('Jharkhand');
+  // Step 2: Problem Details & Urgency
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [department, setDepartment] = useState(JHARKHAND_DEPARTMENTS[0]);
+  const [urgency, setUrgency] = useState(URGENCIES[0].value);
+
+  // Step 3: Geotagging & Evidence
   const [district, setDistrict] = useState('Ranchi');
   const [ward, setWard] = useState('Ward 12, Kanke Road');
   const [address, setAddress] = useState('Kanke Road Pumping Station Junction, Ranchi');
-  const [lat, setLat] = useState(23.3629);
-  const [lng, setLng] = useState(85.3372);
+  const [lat, setLat] = useState(23.6102);
+  const [lng, setLng] = useState(85.2799);
+  const [rawFiles, setRawFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
 
-  // Evidence Files
-  const [files, setFiles] = useState([
-    { name: 'contaminated_tap_water_sample.jpg', size: '2.4 MB', type: 'image' }
-  ]);
-
+  // Step 4: Legal & Results
   const [declared, setDeclared] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedComplaint, setSubmittedComplaint] = useState(null);
 
-  // GPS Auto-detect simulation
+  // Device GPS
   const handleDetectGPS = () => {
-    showToast('GPS coordinates fetched accurately from device sensor in Jharkhand', 'info');
-    setLat(23.3629 + (Math.random() - 0.5) * 0.01);
-    setLng(85.3372 + (Math.random() - 0.5) * 0.01);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLat(Number(pos.coords.latitude.toFixed(6)));
+          setLng(Number(pos.coords.longitude.toFixed(6)));
+          showToast('GPS coordinates acquired from device sensor in Jharkhand', 'success');
+        },
+        (err) => {
+          console.warn('[GPS] Geolocation error:', err.message);
+          setLat(23.3629);
+          setLng(85.3372);
+          showToast('GPS sensor timed out. Set to Ranchi center coordinates.', 'info');
+        },
+        { timeout: 8000 }
+      );
+    } else {
+      setLat(23.3629);
+      setLng(85.3372);
+      showToast('Geolocation not supported by browser. Using default coordinates.', 'info');
+    }
   };
 
   const handleFileUpload = (e) => {
-    const uploaded = Array.from(e.target.files || []);
-    if (uploaded.length > 0) {
-      const newItems = uploaded.map((f) => ({
+    const selected = Array.from(e.target.files || []);
+    if (selected.length > 0) {
+      setRawFiles((prev) => [...prev, ...selected]);
+      const newPreviews = selected.map((f) => ({
         name: f.name,
-        size: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
+        size: `${(f.size / (1024 * 1024)).toFixed(2)} MB`,
         type: f.type.includes('pdf') ? 'pdf' : 'image'
       }));
-      setFiles((prev) => [...prev, ...newItems]);
-      showToast(`${uploaded.length} evidence file(s) attached and virus scanned`, 'success');
+      setFilePreviews((prev) => [...prev, ...newPreviews]);
+      showToast(`${selected.length} evidence file(s) attached and verified`, 'success');
     }
   };
 
   const removeFile = (index) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setRawFiles((prev) => prev.filter((_, i) => i !== index));
+    setFilePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!declared) {
-      showToast('Please accept the legal declaration before submission', 'error');
+      showToast('Please confirm the legal declaration before final submission', 'error');
       return;
     }
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const newComplaint = addComplaint({
-        title,
-        category,
-        urgency,
-        urgencyLevel: urgency.includes('12 Hours') ? 'critical' : urgency.includes('48 Hours') ? 'high' : 'standard',
-        department,
-        description,
-        citizen: user?.name || 'Rajesh Kumar',
-        submittedBy: user?._id || 'u1001',
-        location: {
-          state,
-          district,
-          ward,
-          address,
-          lat,
-          lng
-        },
-        mediaUrls: files
-      });
+    try {
+      // Map UI urgency to backend enum ('low', 'medium', 'high')
+      const chosenUrgency = URGENCIES.find((u) => u.value === urgency);
+      const dbUrgency = chosenUrgency?.dbUrgency || 'high';
 
-      showToast(
-        `Grievance registered successfully with Govt. of Jharkhand! URN: ${newComplaint.urn}`,
-        'success'
+      // Build real multipart FormData
+      const formData = new FormData();
+      formData.append('title', title.trim());
+      formData.append('description', description.trim());
+      formData.append('district', district);
+      formData.append('category', category);
+      formData.append('urgency', dbUrgency);
+      formData.append('submitterType', submitterType);
+      formData.append('department', department);
+      formData.append(
+        'location',
+        JSON.stringify({
+          lat: Number(lat),
+          lng: Number(lng),
+          address: `${address}, ${ward}, ${district}, Jharkhand`
+        })
       );
 
+      // Append files with field 'images' matching Multer backend contract
+      rawFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+
+      const res = await complaintsApi.createComplaint(formData);
+      if (res && res.success && res.complaint) {
+        setSubmittedComplaint(res.complaint);
+        showToast(
+          `Grievance registered successfully! URN: SAM-2026-${res.complaint._id.slice(-6).toUpperCase()}`,
+          'success'
+        );
+      } else {
+        throw new Error(res?.message || 'Server error creating complaint');
+      }
+    } catch (err) {
+      console.error('[CitizenSubmit] Submission failure:', err);
+      showToast(`Submission failed: ${err.message}`, 'error');
+    } finally {
       setIsSubmitting(false);
-      navigate(`/complaints/${newComplaint._id}`);
-    }, 600);
+    }
   };
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Header */}
+      {/* Header Banner */}
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-semibold">
             <span className="material-symbols-outlined text-[16px]">edit_document</span>
-            <span>Government of Jharkhand — Grievance Registration</span>
+            <span>Government of Jharkhand — Civic Redressal Portal</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-on-surface">
-            Register New Civic Grievance
+            Register Civic Grievance
           </h1>
-          <p className="text-sm text-secondary leading-relaxed">
-            AI Computer Vision & NLP automated categorization under Government of Jharkhand with SLA tracking
+          <p className="text-sm text-secondary">
+            AI Triage & Deduplication pipeline with automatic Academic R&D matching across 24 Jharkhand districts
           </p>
         </div>
 
@@ -160,27 +233,27 @@ function CitizenSubmit() {
           className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-1.5 shrink-0"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
-          <span>Back to Complaints</span>
+          <span>My Complaints</span>
         </button>
       </div>
 
-      {/* 4 Step Progress Bar */}
+      {/* 4-Step Progress Indicator */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { step: 1, label: '1. Details', icon: 'description' },
-          { step: 2, label: '2. Geotag', icon: 'location_on' },
-          { step: 3, label: '3. Evidence', icon: 'upload_file' },
-          { step: 4, label: '4. Review & Submit', icon: 'verified' }
+          { step: 1, label: '1. Submitter & Category', icon: 'account_tree' },
+          { step: 2, label: '2. Problem & Urgency', icon: 'description' },
+          { step: 3, label: '3. Geotag & Evidence', icon: 'location_on' },
+          { step: 4, label: '4. Legal & Instant URN', icon: 'verified' }
         ].map((s) => {
-          const isDone = currentStep > s.step;
+          const isDone = currentStep > s.step || (submittedComplaint && s.step === 4);
           const isCurrent = currentStep === s.step;
           return (
             <div
               key={s.step}
-              onClick={() => setCurrentStep(s.step)}
+              onClick={() => !submittedComplaint && setCurrentStep(s.step)}
               className={`cursor-pointer p-4 rounded-2xl border text-center transition-all ${
                 isCurrent
-                  ? 'bg-surface-container-high border-primary text-primary font-bold shadow-sm'
+                  ? 'bg-surface-container-high border-primary text-primary font-bold shadow-sm ring-1 ring-primary/40'
                   : isDone
                   ? 'bg-surface-container-low border-[#00b07a]/40 text-[#4edea3]'
                   : 'bg-surface-container-low border-surface-container-highest text-secondary hover:bg-surface-container'
@@ -199,16 +272,95 @@ function CitizenSubmit() {
 
       {/* Wizard Form Container */}
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm">
-        {/* Step 1: Details */}
+        {/* Step 1: Submitter Type & Category */}
         {currentStep === 1 && (
           <div className="space-y-6">
             <div className="border-b border-surface-container-highest pb-3">
-              <h2 className="text-xl font-bold text-on-surface">Step 1: Grievance Particulars</h2>
-              <p className="text-xs text-secondary">Define the nature and severity of the municipal failure</p>
+              <h2 className="text-lg sm:text-xl font-bold text-on-surface">
+                Step 1: Submitter Persona & Civic Domain
+              </h2>
+              <p className="text-xs text-secondary">
+                Select your institutional role and the sector classification of the grievance
+              </p>
+            </div>
+
+            {/* Submitter Persona Selector */}
+            <div>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2.5">
+                Submitter Institutional Classification *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {SUBMITTER_PERSONAS.map((p) => {
+                  const isSelected = submitterType === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setSubmitterType(p.id)}
+                      className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+                        isSelected
+                          ? 'bg-surface-container-high border-primary text-on-surface ring-2 ring-primary/30 shadow-sm'
+                          : 'bg-surface-container border-surface-container-highest text-secondary hover:bg-surface-container-high'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="material-symbols-outlined text-primary text-2xl">{p.icon}</span>
+                        {isSelected && (
+                          <span className="material-symbols-outlined text-primary text-base">check_circle</span>
+                        )}
+                      </div>
+                      <div className="font-bold text-xs text-on-surface mb-1">{p.label}</div>
+                      <p className="text-[11px] text-secondary leading-snug">{p.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Category Dropdown */}
+            <div>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                Primary Civic Category *
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+              >
+                <span>Continue to Problem Details</span>
+                <span className="material-symbols-outlined text-lg">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Problem Details & Urgency */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            <div className="border-b border-surface-container-highest pb-3">
+              <h2 className="text-lg sm:text-xl font-bold text-on-surface">
+                Step 2: Problem Details & Urgency Matrix
+              </h2>
+              <p className="text-xs text-secondary">
+                Describe the specific failure, competent department, and SLA urgency level
+              </p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-secondary mb-1.5">
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
                 Grievance Title / Problem Summary *
               </label>
               <input
@@ -216,52 +368,33 @@ function CitizenSubmit() {
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Pipeline leakage and contaminated water near Kanke Road Ward 12"
-                className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none transition-all"
+                placeholder="e.g. Broken handpump and groundwater fluoride contamination in Angara"
+                className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">
-                  Category Classification
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none transition-all"
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">
-                  Competent Department of the Government of Jharkhand *
-                </label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none transition-all"
-                >
-                  {JHARKHAND_DEPARTMENTS.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                Competent Jharkhand State Department *
+              </label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-3 text-on-surface text-sm focus:border-primary-container outline-none"
+              >
+                {JHARKHAND_DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-secondary mb-2">
-                Urgency & SLA Level
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2">
+                Resolution Urgency & SLA SLA Commitment *
               </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {URGENCIES.map((u) => {
                   const isSelected = urgency === u.value;
                   return (
@@ -270,18 +403,14 @@ function CitizenSubmit() {
                       onClick={() => setUrgency(u.value)}
                       className={`cursor-pointer p-4 rounded-2xl border transition-all ${
                         isSelected
-                          ? 'bg-surface-container-high border-primary text-on-surface ring-2 ring-primary-container/30 shadow-sm'
+                          ? 'bg-surface-container-high border-primary text-on-surface ring-2 ring-primary/30 shadow-sm'
                           : 'bg-surface-container border-surface-container-highest text-secondary hover:bg-surface-container-high'
                       }`}
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-xs">
-                          {u.labelEn}
-                        </span>
+                        <span className="font-bold text-xs">{u.labelEn}</span>
                         {isSelected && (
-                          <span className="material-symbols-outlined text-primary text-base font-bold">
-                            check_circle
-                          </span>
+                          <span className="material-symbols-outlined text-primary text-base">check_circle</span>
                         )}
                       </div>
                       <p className="text-[11px] opacity-80 leading-snug">{u.desc}</p>
@@ -292,28 +421,35 @@ function CitizenSubmit() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-secondary mb-1.5">
-                Detailed Grievance Narrative & Impact *
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                Detailed Narrative & Social Beneficiary Impact *
               </label>
               <textarea
                 rows={4}
                 required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Explain the background, duration, affected families, and any prior local ticket references..."
-                className="w-full bg-surface-container border border-surface-container-highest rounded-xl p-4 text-on-surface text-sm leading-relaxed focus:border-primary-container outline-none transition-all"
+                placeholder="Detail the municipal failure, number of impacted residents/students, duration of outage, and any local attempts at repair..."
+                className="w-full bg-surface-container border border-surface-container-highest rounded-xl p-4 text-on-surface text-sm leading-relaxed focus:border-primary-container outline-none"
               />
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-between pt-4">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface"
+              >
+                Back
+              </button>
               <button
                 type="button"
                 onClick={() => {
-                  if (!title || !description) {
-                    showToast('Please enter both title and description before proceeding', 'error');
+                  if (!title.trim() || !description.trim()) {
+                    showToast('Title and detailed description are required', 'error');
                     return;
                   }
-                  setCurrentStep(2);
+                  setCurrentStep(3);
                 }}
                 className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
               >
@@ -324,25 +460,23 @@ function CitizenSubmit() {
           </div>
         )}
 
-        {/* Step 2: Geotag & Map */}
-        {currentStep === 2 && (
+        {/* Step 3: Geotagging & Evidence Upload */}
+        {currentStep === 3 && (
           <div className="space-y-6">
             <div className="border-b border-surface-container-highest pb-3">
-              <h2 className="text-xl font-bold text-on-surface">Step 2: Geographic Location & GPS Geotag</h2>
-              <p className="text-xs text-secondary">Pinpoint exact Jharkhand municipal boundary and GPS telemetry coordinates</p>
+              <h2 className="text-lg sm:text-xl font-bold text-on-surface">
+                Step 3: Interactive GIS Pin & Multipart Evidence
+              </h2>
+              <p className="text-xs text-secondary">
+                Click on the Jharkhand interactive map to reposition the GPS pin, or use your device sensor
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">State</label>
-                <div className="px-4 py-2.5 bg-surface-container border border-surface-container-highest rounded-xl text-on-surface text-sm font-semibold flex items-center justify-between">
-                  <span>Jharkhand</span>
-                  <span className="text-xs bg-primary-container/20 text-primary px-2 py-0.5 rounded">Govt. of Jharkhand</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">Jharkhand District *</label>
+                <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                  Jharkhand District *
+                </label>
                 <select
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
@@ -355,277 +489,291 @@ function CitizenSubmit() {
                   ))}
                 </select>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">Ward Number / Pincode</label>
+                <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                  Ward / Block / Gram Panchayat *
+                </label>
                 <input
                   type="text"
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
-                  className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-2.5 text-on-surface text-sm focus:border-primary-container outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-secondary mb-1.5">Landmark / Street Address</label>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g. Ward 12, Angara Block"
                   className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-2.5 text-on-surface text-sm focus:border-primary-container outline-none"
                 />
               </div>
             </div>
 
-            {/* GPS Telemetry & Simulated Map */}
-            <div className="bg-surface-container border border-surface-container-highest rounded-2xl p-5 space-y-4">
-              <div className="flex flex-wrap justify-between items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">satellite_alt</span>
-                  <span className="font-bold text-on-surface text-sm">GPS Telemetry Coordinates</span>
-                </div>
+            <div>
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
+                Exact Street / Landmark Address *
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g. Near Govt Primary School, Angara Main Road, Ranchi"
+                className="w-full bg-surface-container border border-surface-container-highest rounded-xl px-4 py-2.5 text-on-surface text-sm focus:border-primary-container outline-none"
+              />
+            </div>
+
+            {/* Leaflet Interactive Map */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-secondary uppercase tracking-wider">
+                  Interactive Coordinate Pin (Click Map to Move Pin)
+                </label>
                 <button
                   type="button"
                   onClick={handleDetectGPS}
-                  className="px-3 py-1.5 bg-primary-container/20 hover:bg-primary-container/30 text-primary border border-primary-container/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                  className="px-3 py-1 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-lg text-xs font-bold text-primary flex items-center gap-1 transition-all"
                 >
-                  <span className="material-symbols-outlined text-base">my_location</span>
-                  <span>Detect Device GPS</span>
+                  <span className="material-symbols-outlined text-sm">my_location</span>
+                  <span>Acquire Device GPS</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-surface-container-low p-3 rounded-xl border border-surface-container-highest">
-                  <span className="text-[11px] text-secondary block">Latitude</span>
-                  <span className="font-code-num font-bold text-on-surface text-sm">{lat.toFixed(6)}° N</span>
-                </div>
-                <div className="bg-surface-container-low p-3 rounded-xl border border-surface-container-highest">
-                  <span className="text-[11px] text-secondary block">Longitude</span>
-                  <span className="font-code-num font-bold text-on-surface text-sm">{lng.toFixed(6)}° E</span>
-                </div>
+              <div className="w-full h-64 rounded-2xl overflow-hidden border border-surface-container-highest relative z-0">
+                <MapContainer
+                  center={[lat, lng]}
+                  zoom={11}
+                  scrollWheelZoom={false}
+                  className="w-full h-full"
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                  />
+                  <MapClickHandler
+                    position={[lat, lng]}
+                    onPositionChange={(newLat, newLng) => {
+                      setLat(Number(newLat.toFixed(6)));
+                      setLng(Number(newLng.toFixed(6)));
+                      showToast(`Pin moved to: ${newLat.toFixed(4)}, ${newLng.toFixed(4)}`, 'info');
+                    }}
+                  />
+                </MapContainer>
               </div>
 
-              {/* Map visualizer */}
-              <div className="h-44 bg-surface-container-highest/40 rounded-xl border border-surface-container-highest relative overflow-hidden flex items-center justify-center">
-                <div className="z-10 text-center space-y-1">
-                  <div className="w-10 h-10 bg-primary-container text-white rounded-full mx-auto flex items-center justify-center shadow-lg animate-bounce">
-                    <span className="material-symbols-outlined text-2xl">location_on</span>
-                  </div>
-                  <p className="text-xs font-bold text-on-surface">{address}, {district}, Jharkhand</p>
-                  <p className="text-[11px] text-secondary font-code-num">Geotagged & Timestamped: WGS84</p>
-                </div>
+              <div className="flex items-center gap-4 text-xs text-secondary font-mono">
+                <span>Lat: <strong className="text-on-surface">{lat}</strong></span>
+                <span>Lng: <strong className="text-on-surface">{lng}</strong></span>
               </div>
             </div>
 
-            <div className="flex justify-between pt-4">
-              <button
-                type="button"
-                onClick={() => setCurrentStep(1)}
-                className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentStep(3)}
-                className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 text-xs"
-              >
-                <span>Continue to Evidence</span>
-                <span className="material-symbols-outlined text-lg">arrow_forward</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Evidence Upload */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <div className="border-b border-surface-container-highest pb-3">
-              <h2 className="text-xl font-bold text-on-surface">Step 3: Upload Photographic & Evidence Media</h2>
-              <p className="text-xs text-secondary">AI computer vision inspects turbidity, structural fissures, and environmental hazards</p>
-            </div>
-
-            {/* Drop Zone */}
-            <div className="border-2 border-dashed border-surface-container-highest hover:border-primary-container/60 rounded-2xl sm:rounded-3xl p-8 text-center bg-surface-container/40 transition-colors">
-              <input
-                type="file"
-                multiple
-                id="evidence-upload"
-                onChange={handleFileUpload}
-                className="hidden"
-                accept="image/*,.pdf"
-              />
-              <label htmlFor="evidence-upload" className="cursor-pointer space-y-3 block">
-                <div className="w-14 h-14 rounded-2xl bg-primary-container/20 text-primary flex items-center justify-center mx-auto border border-primary-container/30">
-                  <span className="material-symbols-outlined text-3xl">add_photo_alternate</span>
-                </div>
-                <div>
-                  <span className="font-bold text-on-surface text-sm hover:text-primary">
-                    Click to browse files
-                  </span>
-                  <span className="text-secondary text-xs block mt-0.5">
-                    or drag & drop geotagged photos (JPG, PNG, PDF up to 15MB)
-                  </span>
-                </div>
+            {/* Evidence Upload */}
+            <div className="space-y-3 pt-2">
+              <label className="block text-xs font-bold text-secondary uppercase tracking-wider">
+                Upload Photo Evidence & Field Documents (Images / PDFs)
               </label>
-            </div>
 
-            {/* Attached Files List */}
-            {files.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-on-surface">Attached Verification Files ({files.length})</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {files.map((file, idx) => (
+              <label className="border-2 border-dashed border-surface-container-highest hover:border-primary-container rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer bg-surface-container/50 hover:bg-surface-container transition-all">
+                <span className="material-symbols-outlined text-3xl text-primary">cloud_upload</span>
+                <span className="text-xs font-semibold text-on-surface">Click to attach photo or PDF proof</span>
+                <span className="text-[11px] text-secondary">Images will be analyzed by Gemini Computer Vision</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {filePreviews.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                  {filePreviews.map((f, i) => (
                     <div
-                      key={idx}
-                      className="flex items-center justify-between p-3.5 bg-surface-container rounded-xl border border-surface-container-highest shadow-sm"
+                      key={i}
+                      className="p-3 bg-surface-container rounded-xl border border-surface-container-highest flex items-center justify-between text-xs"
                     >
-                      <div className="flex items-center gap-3 truncate">
-                        <span className="material-symbols-outlined text-primary text-xl">
-                          {file.type === 'pdf' ? 'picture_as_pdf' : 'image'}
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="material-symbols-outlined text-primary text-base">
+                          {f.type === 'pdf' ? 'picture_as_pdf' : 'image'}
                         </span>
-                        <div className="truncate">
-                          <p className="text-xs font-bold text-on-surface truncate">{file.name}</p>
-                          <p className="text-[11px] text-secondary">{file.size} • Verified</p>
-                        </div>
+                        <span className="text-on-surface font-medium truncate">{f.name}</span>
+                        <span className="text-secondary text-[10px]">({f.size})</span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => removeFile(idx)}
-                        className="text-secondary hover:text-error p-1 rounded-lg transition-colors"
+                        onClick={() => removeFile(i)}
+                        className="text-secondary hover:text-red-400 p-1"
                       >
-                        <span className="material-symbols-outlined text-base">delete</span>
+                        <span className="material-symbols-outlined text-sm">close</span>
                       </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex justify-between pt-4">
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all"
+                className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface"
               >
                 Back
               </button>
               <button
                 type="button"
                 onClick={() => setCurrentStep(4)}
-                className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 text-xs"
+                className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
               >
-                <span>Continue to Final Review</span>
+                <span>Continue to Review & Submit</span>
                 <span className="material-symbols-outlined text-lg">arrow_forward</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Review & Legal Declaration */}
+        {/* Step 4: Review, Legal Declaration & Instant URN */}
         {currentStep === 4 && (
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
             <div className="border-b border-surface-container-highest pb-3">
-              <h2 className="text-xl font-bold text-on-surface">Step 4: Final Summary & Digital Citizen Sign-off</h2>
-              <p className="text-xs text-secondary">Verify all grievance details before submitting to Government of Jharkhand Redressal Network</p>
-            </div>
-
-            {/* Grievance Review Card */}
-            <div className="bg-surface-container rounded-2xl p-5 border border-surface-container-highest space-y-4">
-              <div className="flex flex-wrap justify-between items-start gap-2">
-                <div>
-                  <span className="text-xs uppercase tracking-wider text-primary font-bold">{category}</span>
-                  <h3 className="text-lg font-bold text-on-surface">{title || 'Tap water discoloration and odor'}</h3>
-                </div>
-                <span className="px-3 py-1 bg-primary-container/20 text-primary text-xs font-bold rounded-full border border-primary-container/40">
-                  {urgency}
-                </span>
-              </div>
-
-              <p className="text-sm text-secondary leading-relaxed bg-surface-container-low p-4 rounded-xl border border-surface-container-highest">
-                {description}
+              <h2 className="text-lg sm:text-xl font-bold text-on-surface">
+                Step 4: Legal Declaration & Submission
+              </h2>
+              <p className="text-xs text-secondary">
+                Confirm your grievance details under official Jharkhand IT & e-Governance statutes
               </p>
+            </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-surface-container-low p-2.5 rounded-lg border border-surface-container-highest">
-                  <span className="text-secondary block">State</span>
-                  <span className="font-bold text-on-surface">{state}</span>
+            {!submittedComplaint ? (
+              <div className="space-y-6">
+                {/* Review Card */}
+                <div className="p-5 rounded-2xl bg-surface-container border border-surface-container-highest space-y-3 text-xs">
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Submitter Classification:</span>
+                    <strong className="text-on-surface capitalize">{submitterType}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Category:</span>
+                    <strong className="text-on-surface">{category}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Title:</span>
+                    <strong className="text-on-surface">{title}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Department:</span>
+                    <strong className="text-on-surface">{department}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Urgency / SLA:</span>
+                    <strong className="text-primary">{urgency}</strong>
+                  </div>
+                  <div className="flex justify-between border-b border-surface-container-highest/60 pb-2">
+                    <span className="text-secondary">Location:</span>
+                    <strong className="text-on-surface">{address}, {ward}, {district} ({lat}, {lng})</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-secondary">Evidence Attached:</span>
+                    <strong className="text-on-surface">{rawFiles.length} file(s)</strong>
+                  </div>
                 </div>
-                <div className="bg-surface-container-low p-2.5 rounded-lg border border-surface-container-highest">
-                  <span className="text-secondary block">District</span>
-                  <span className="font-bold text-on-surface">{district}</span>
-                </div>
-                <div className="bg-surface-container-low p-2.5 rounded-lg border border-surface-container-highest">
-                  <span className="text-secondary block">Department</span>
-                  <span className="font-bold text-on-surface truncate block">{department}</span>
-                </div>
-                <div className="bg-surface-container-low p-2.5 rounded-lg border border-surface-container-highest">
-                  <span className="text-secondary block">Attached Evidence</span>
-                  <span className="font-bold text-on-surface">{files.length} File(s)</span>
+
+                {/* Legal Declaration */}
+                <label className="flex items-start gap-3 p-4 rounded-2xl bg-surface-container border border-surface-container-highest cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={declared}
+                    onChange={(e) => setDeclared(e.target.checked)}
+                    className="mt-0.5 rounded text-primary focus:ring-primary h-4 w-4 bg-surface-container-high border-surface-container-highest"
+                  />
+                  <div className="text-xs text-secondary leading-relaxed">
+                    <strong className="text-on-surface">Legal Declaration & Authenticity Guarantee:</strong>{' '}
+                    I hereby affirm under penalty of false representation that this civic failure narrative, geotagged coordinate, and photographic evidence are accurate and filed in public interest with the Government of Jharkhand.
+                  </div>
+                </label>
+
+                <div className="flex justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(3)}
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface"
+                  >
+                    Back
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !declared}
+                    className="px-8 py-3.5 bg-primary-container hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Executing AI Triage Pipeline...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-lg">send</span>
+                        <span>Submit to Government Registry</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Success / Instant URN & Dynamic AI Triage Results */
+              <div className="space-y-6 text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-[#003824] text-[#4edea3] border border-[#00b07a] flex items-center justify-center mx-auto shadow-md">
+                  <span className="material-symbols-outlined text-3xl">verified</span>
+                </div>
 
-            {/* AI Automated Pipeline Preview */}
-            <div className="bg-primary-container/10 border border-primary-container/30 rounded-2xl p-4 flex items-start gap-3">
-              <span className="material-symbols-outlined text-primary text-2xl mt-0.5">auto_awesome</span>
-              <div className="space-y-1">
-                <h4 className="font-bold text-on-surface text-sm">
-                  AI Computer Vision & Academic Innovation Pipeline Ready
-                </h4>
-                <p className="text-xs text-secondary leading-relaxed">
-                  Upon submission, this grievance will undergo computer vision verification, auto-dispatch to{' '}
-                  <span className="font-semibold text-on-surface">{department}</span>, and open for Jharkhand university engineering bids.
-                </p>
+                <div className="space-y-2">
+                  <span className="px-3 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-bold font-mono">
+                    URN: SAM-2026-{submittedComplaint._id.slice(-6).toUpperCase()}
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-bold text-on-surface">
+                    Grievance Registered Successfully!
+                  </h3>
+                  <p className="text-xs text-secondary max-w-md mx-auto">
+                    Logged in Jharkhand State Master Grievance Registry and queued for AI classification, vector embedding, and academic innovation matching.
+                  </p>
+                </div>
+
+                {/* AI Triage Card */}
+                <div className="max-w-md mx-auto p-4 rounded-2xl bg-surface-container border border-surface-container-highest text-left space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-secondary font-medium">Initial Status:</span>
+                    <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary font-bold capitalize">
+                      {submittedComplaint.status || 'Pending AI Verification'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-secondary font-medium">District Registry:</span>
+                    <strong className="text-on-surface">{submittedComplaint.district}</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-secondary font-medium">Auto-Triaged Urgency:</span>
+                    <strong className="text-primary capitalize">{submittedComplaint.urgency}</strong>
+                  </div>
+                </div>
+
+                <div className="flex justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => navigate(`/complaints/${submittedComplaint._id}`)}
+                    className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                  >
+                    <span>View Official Dossier</span>
+                    <span className="material-symbols-outlined text-base">arrow_forward</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/citizen/complaints')}
+                    className="px-5 py-3 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-xs font-bold text-secondary hover:text-on-surface rounded-xl transition-all"
+                  >
+                    Return to Complaints
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Legal Citizen Declaration Checkbox */}
-            <div className="flex items-start gap-3 p-4 bg-surface-container rounded-2xl border border-surface-container-highest">
-              <input
-                type="checkbox"
-                id="legal-decl"
-                checked={declared}
-                onChange={(e) => setDeclared(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded border-surface-container-highest text-primary-container focus:ring-primary-container"
-              />
-              <label htmlFor="legal-decl" className="text-xs text-on-surface cursor-pointer select-none leading-relaxed">
-                I hereby declare under the Jharkhand Public Grievance Redressal Rules that the facts provided above are authentic to the best of my knowledge. I understand that submitting false or frivolous complaints is punishable under administrative regulations.
-              </label>
-            </div>
-
-            <div className="flex justify-between pt-4">
-              <button
-                type="button"
-                onClick={() => setCurrentStep(3)}
-                className="px-5 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all"
-              >
-                Back
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || !declared}
-                className={`px-8 py-3.5 bg-primary-container hover:bg-orange-600 text-white text-xs font-bold rounded-2xl shadow-lg transition-all flex items-center gap-2.5 ${
-                  !declared ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98]'
-                }`}
-              >
-                {isSubmitting ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-lg">send</span>
-                    <span>Submit & Generate URN Tracking</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 }
-
-export default CitizenSubmit;

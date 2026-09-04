@@ -1,43 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useData } from '../context/DataContext';
+import { complaintsApi } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import StatusBadge from '../components/StatusBadge';
 
-function CitizenComplaints() {
-  const { complaints } = useData();
+export default function CitizenComplaints() {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // Stats
+  const fetchMyComplaints = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await complaintsApi.getComplaints({ submittedBy: 'me' });
+      if (res && res.success) {
+        setComplaints(res.complaints || []);
+      }
+    } catch (err) {
+      console.error('[CitizenComplaints] Fetch error:', err);
+      setError(err.message || 'Failed to fetch grievances');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMyComplaints();
+  }, [fetchMyComplaints]);
+
+  // Dynamic KPI Counts
   const totalCount = complaints.length;
-  const inProgressCount = complaints.filter((c) => c.status === 'In Progress').length;
-  const resolvedCount = complaints.filter((c) => c.status === 'Resolved').length;
-  const criticalCount = complaints.filter((c) => (c.urgencyLevel === 'critical' || (c.urgency || '').includes('Critical'))).length;
+  const pendingCount = complaints.filter((c) => c.status === 'pending').length;
+  const underRdCount = complaints.filter((c) => ['assigned', 'in_progress'].includes(c.status)).length;
+  const resolvedCount = complaints.filter((c) => c.status === 'resolved').length;
 
   // Filtered List
   const filteredComplaints = useMemo(() => {
     return complaints.filter((c) => {
+      const urn = c.urn || `SAM-2026-${(c._id || '').slice(-6).toUpperCase()}`;
       const matchesSearch =
         c.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.urn?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        urn.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.location?.district?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.department?.toLowerCase().includes(searchQuery.toLowerCase());
+        c.district?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesStatus =
-        statusFilter === 'ALL'
-          ? true
-          : statusFilter === 'IN_PROGRESS'
-          ? c.status === 'In Progress'
-          : statusFilter === 'RESOLVED'
-          ? c.status === 'Resolved'
-          : statusFilter === 'CRITICAL'
-          ? (c.urgencyLevel === 'critical' || (c.urgency || '').includes('Critical'))
-          : true;
+      const statusLower = (c.status || '').toLowerCase();
+      let matchesStatus = true;
+      if (statusFilter === 'PENDING') {
+        matchesStatus = statusLower === 'pending';
+      } else if (statusFilter === 'RD') {
+        matchesStatus = ['assigned', 'in_progress'].includes(statusLower);
+      } else if (statusFilter === 'RESOLVED') {
+        matchesStatus = statusLower === 'resolved';
+      }
 
       return matchesSearch && matchesStatus;
     });
@@ -47,10 +68,10 @@ function CitizenComplaints() {
     <div className="space-y-8 pb-12">
       {/* Header Banner */}
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-semibold">
             <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-            <span>Government of Jharkhand — Citizen Grievance Redressal Portal</span>
+            <span>Government of Jharkhand — Citizen Grievance Portal</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
             Citizen Grievance Redressal Command
@@ -62,7 +83,7 @@ function CitizenComplaints() {
 
         <button
           onClick={() => navigate('/citizen/submit')}
-          className="px-6 py-3.5 bg-primary-container hover:bg-orange-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-md hover:shadow-orange-500/20 transition-all flex items-center gap-2.5 whitespace-nowrap shrink-0"
+          className="px-6 py-3.5 bg-primary-container hover:bg-orange-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-md transition-all flex items-center gap-2.5 whitespace-nowrap shrink-0"
         >
           <span className="material-symbols-outlined text-xl">add_circle</span>
           <span>Register Grievance</span>
@@ -71,7 +92,6 @@ function CitizenComplaints() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Filed */}
         <div
           onClick={() => setStatusFilter('ALL')}
           className={`cursor-pointer rounded-2xl p-5 border transition-all shadow-sm ${
@@ -85,96 +105,83 @@ function CitizenComplaints() {
             <span className="material-symbols-outlined text-lg">folder_open</span>
           </div>
           <div className="text-2xl sm:text-3xl font-bold font-code-num text-on-surface">{totalCount}</div>
-          <div className="text-xs text-secondary mt-1 flex items-center gap-1">
-            <span className="text-primary font-medium">100%</span> tracked via URN
-          </div>
+          <div className="text-xs text-secondary mt-1">100% Tracked via URN</div>
         </div>
 
-        {/* In Progress */}
         <div
-          onClick={() => setStatusFilter('IN_PROGRESS')}
+          onClick={() => setStatusFilter('PENDING')}
           className={`cursor-pointer rounded-2xl p-5 border transition-all shadow-sm ${
-            statusFilter === 'IN_PROGRESS'
+            statusFilter === 'PENDING'
               ? 'bg-surface-container-high border-primary ring-2 ring-primary-container/30'
               : 'bg-surface-container-low border-surface-container-highest hover:bg-surface-container'
           }`}
         >
           <div className="flex justify-between items-center text-secondary mb-2">
-            <span className="text-xs font-semibold">Active Remediation</span>
-            <span className="material-symbols-outlined text-lg text-primary">pending_actions</span>
+            <span className="text-xs font-semibold">Pending AI Triage</span>
+            <span className="material-symbols-outlined text-lg text-primary">auto_awesome</span>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-code-num text-primary">{inProgressCount}</div>
-          <div className="text-xs text-secondary mt-1 flex items-center gap-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-primary animate-ping"></span>
-            Within active SLA
-          </div>
+          <div className="text-2xl sm:text-3xl font-bold font-code-num text-primary">{pendingCount}</div>
+          <div className="text-xs text-secondary mt-1">Classification Queue</div>
         </div>
 
-        {/* Resolved */}
+        <div
+          onClick={() => setStatusFilter('RD')}
+          className={`cursor-pointer rounded-2xl p-5 border transition-all shadow-sm ${
+            statusFilter === 'RD'
+              ? 'bg-surface-container-high border-primary ring-2 ring-primary-container/30'
+              : 'bg-surface-container-low border-surface-container-highest hover:bg-surface-container'
+          }`}
+        >
+          <div className="flex justify-between items-center text-secondary mb-2">
+            <span className="text-xs font-semibold">Under University R&D</span>
+            <span className="material-symbols-outlined text-lg text-tertiary">school</span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-bold font-code-num text-tertiary">{underRdCount}</div>
+          <div className="text-xs text-secondary mt-1">Applied Engineering Projects</div>
+        </div>
+
         <div
           onClick={() => setStatusFilter('RESOLVED')}
           className={`cursor-pointer rounded-2xl p-5 border transition-all shadow-sm ${
             statusFilter === 'RESOLVED'
-              ? 'bg-surface-container-high border-[#00b07a] ring-2 ring-[#00b07a]/30'
+              ? 'bg-surface-container-high border-primary ring-2 ring-primary-container/30'
               : 'bg-surface-container-low border-surface-container-highest hover:bg-surface-container'
           }`}
         >
           <div className="flex justify-between items-center text-secondary mb-2">
-            <span className="text-xs font-semibold">Resolved & Signed</span>
-            <span className="material-symbols-outlined text-lg text-[#4edea3]">task_alt</span>
+            <span className="text-xs font-semibold">Resolved & Verified</span>
+            <span className="material-symbols-outlined text-lg text-[#4edea3]">check_circle</span>
           </div>
           <div className="text-2xl sm:text-3xl font-bold font-code-num text-[#4edea3]">{resolvedCount}</div>
-          <div className="text-xs text-secondary mt-1 flex items-center gap-1 text-[#4edea3]">
-            Citizen OTP verified
-          </div>
-        </div>
-
-        {/* Critical Life Safety */}
-        <div
-          onClick={() => setStatusFilter('CRITICAL')}
-          className={`cursor-pointer rounded-2xl p-5 border transition-all shadow-sm ${
-            statusFilter === 'CRITICAL'
-              ? 'bg-surface-container-high border-error ring-2 ring-error/30'
-              : 'bg-surface-container-low border-surface-container-highest hover:bg-surface-container'
-          }`}
-        >
-          <div className="flex justify-between items-center text-secondary mb-2">
-            <span className="text-xs font-semibold">Critical (12h SLA)</span>
-            <span className="material-symbols-outlined text-lg text-error">warning</span>
-          </div>
-          <div className="text-2xl sm:text-3xl font-bold font-code-num text-error">{criticalCount}</div>
-          <div className="text-xs text-error mt-1 flex items-center gap-1 font-medium">
-            Auto-escalated to Officer
-          </div>
+          <div className="text-xs text-secondary mt-1">Closed with Citizen Sign-off</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center bg-surface-container-low p-4 rounded-2xl border border-surface-container-highest shadow-sm">
-        <div className="relative flex-1">
+      <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
+        <div className="relative flex-1 w-full">
           <span className="material-symbols-outlined absolute left-3.5 top-2.5 text-secondary text-lg">search</span>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by URN, keyword, department, or district (Ranchi, Dhanbad, Jamshedpur)..."
-            className="w-full bg-surface-container border border-surface-container-highest rounded-xl pl-10 pr-4 py-2 text-on-surface text-sm focus:border-primary-container outline-none transition-all placeholder:text-secondary/70"
+            placeholder="Search by URN, keyword, district, or category..."
+            className="w-full bg-surface-container border border-surface-container-highest rounded-xl pl-10 pr-4 py-2 text-on-surface text-xs sm:text-sm focus:border-primary-container outline-none"
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
           {[
-            { key: 'ALL', label: 'All' },
-            { key: 'IN_PROGRESS', label: 'In Progress' },
-            { key: 'RESOLVED', label: 'Resolved' },
-            { key: 'CRITICAL', label: 'Critical' }
+            { id: 'ALL', label: 'All' },
+            { id: 'PENDING', label: 'Pending AI Triage' },
+            { id: 'RD', label: 'Under R&D' },
+            { id: 'RESOLVED', label: 'Resolved' }
           ].map((tab) => (
             <button
-              key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                statusFilter === tab.key
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                statusFilter === tab.id
                   ? 'bg-primary-container text-white font-bold shadow-sm'
                   : 'bg-surface-container text-secondary hover:text-on-surface'
               }`}
@@ -186,96 +193,110 @@ function CitizenComplaints() {
       </div>
 
       {/* Complaints List */}
-      <div className="space-y-4">
-        {filteredComplaints.length === 0 ? (
-          <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl p-12 text-center space-y-4">
-            <span className="material-symbols-outlined text-5xl text-secondary">manage_search</span>
-            <div className="space-y-1">
-              <h3 className="text-xl font-bold text-on-surface">No Grievances Found</h3>
-              <p className="text-sm text-secondary">
-                No complaints matched your search filter criteria.
-              </p>
-            </div>
-          </div>
-        ) : (
-          filteredComplaints.map((item) => {
-            const isCritical = item.urgencyLevel === 'critical' || (item.urgency || '').includes('12 Hours');
+      {loading ? (
+        <div className="py-16 text-center space-y-3">
+          <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-secondary">Fetching official citizen grievances from Jharkhand server...</p>
+        </div>
+      ) : error ? (
+        <div className="p-8 bg-surface-container-low border border-red-500/40 rounded-2xl text-center space-y-3">
+          <span className="material-symbols-outlined text-4xl text-error">error</span>
+          <p className="text-sm text-on-surface font-semibold">{error}</p>
+          <button
+            onClick={fetchMyComplaints}
+            className="px-4 py-2 bg-primary-container text-white text-xs font-bold rounded-xl"
+          >
+            Retry Fetch
+          </button>
+        </div>
+      ) : filteredComplaints.length === 0 ? (
+        <div className="p-12 bg-surface-container-low border border-surface-container-highest rounded-2xl text-center space-y-3">
+          <span className="material-symbols-outlined text-5xl text-secondary opacity-40">inbox</span>
+          <h3 className="text-base font-bold text-on-surface">No Grievances Found</h3>
+          <p className="text-xs text-secondary max-w-sm mx-auto">
+            {searchQuery
+              ? 'No grievances match your search query.'
+              : 'You have not registered any grievances under this filter.'}
+          </p>
+          <button
+            onClick={() => navigate('/citizen/submit')}
+            className="px-5 py-2.5 bg-primary-container text-white text-xs font-bold rounded-xl shadow"
+          >
+            Register Your First Grievance
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredComplaints.map((c) => {
+            const urn = c.urn || `SAM-2026-${c._id.slice(-6).toUpperCase()}`;
+            const dateStr = new Date(c.createdAt).toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric'
+            });
+
             return (
               <div
-                key={item._id || item.urn}
-                onClick={() => navigate(`/complaints/${item._id || item.urn}`)}
-                className="group cursor-pointer bg-surface-container-low hover:bg-surface-container border border-surface-container-highest hover:border-primary-container/60 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-all space-y-4"
+                key={c._id}
+                onClick={() => navigate(`/complaints/${c._id}`)}
+                className="bg-surface-container-low hover:bg-surface-container border border-surface-container-highest hover:border-primary-container/40 rounded-2xl p-5 sm:p-6 shadow-sm transition-all cursor-pointer flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
               >
-                {/* Card Top Row */}
-                <div className="flex flex-wrap justify-between items-start gap-3">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="px-3 py-1 bg-surface-container-high text-primary border border-primary-container/30 rounded-lg text-xs font-code-num font-bold">
-                      {item.urn}
+                <div className="space-y-2 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 bg-surface-container text-primary border border-primary-container/30 rounded-lg text-xs font-code-num font-bold">
+                      {urn}
                     </span>
-                    <span className="px-2.5 py-0.5 bg-surface-container text-secondary text-xs font-medium rounded-md border border-surface-container-highest">
-                      {item.category}
+                    <span className="px-2.5 py-0.5 bg-surface-container text-secondary rounded-lg text-xs capitalize">
+                      {c.category?.replace(/_/g, ' ')}
                     </span>
-                    {isCritical && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-error-container/40 text-error border border-error/50 text-xs font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
-                        12h Critical SLA
+                    <StatusBadge status={c.status} size="sm" />
+                    {c.needsReview && (
+                      <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 text-[10px] font-bold rounded">
+                        Needs Review
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={item.status} size="lg" />
-                    <span className="text-xs text-secondary font-code-num">
-                      {item.date || item.createdAt?.split('T')[0]}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Title & Description */}
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-on-surface group-hover:text-primary transition-colors leading-snug">
-                    {item.title}
+                  <h3 className="text-base sm:text-lg font-bold text-on-surface hover:text-primary transition-colors line-clamp-1">
+                    {c.title}
                   </h3>
-                  <p className="text-sm text-secondary mt-1.5 line-clamp-2 leading-relaxed">
-                    {item.description}
+
+                  <p className="text-xs text-secondary line-clamp-2 leading-relaxed">
+                    {c.description}
                   </p>
+
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-secondary pt-1">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">location_on</span>
+                      <span>{c.district}, Jharkhand</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">calendar_today</span>
+                      <span>{dateStr}</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-primary">
+                      <span className="material-symbols-outlined text-sm">timer</span>
+                      <span className="uppercase">{c.urgency} Priority</span>
+                    </span>
+                  </div>
                 </div>
 
-                {/* Footer Metadata */}
-                <div className="pt-3 border-t border-surface-container-highest flex flex-wrap justify-between items-center gap-4 text-xs text-secondary">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <span className="flex items-center gap-1.5 text-on-surface">
-                      <span className="material-symbols-outlined text-primary text-[16px]">location_on</span>
-                      <span>{item.location?.address || `${item.location?.district}, ${item.location?.state}`}</span>
+                <div className="flex md:flex-col items-center md:items-end justify-between w-full md:w-auto shrink-0 gap-2 border-t md:border-t-0 border-surface-container-highest pt-3 md:pt-0">
+                  <div className="text-left md:text-right">
+                    <span className="text-[11px] text-secondary block">Assigned University</span>
+                    <span className="text-xs font-bold text-tertiary">
+                      {c.assignedUniversity?.name || 'Pending Bidding'}
                     </span>
-
-                    {item.aiAnalysis && (
-                      <span className="flex items-center gap-1 bg-surface-container px-2.5 py-0.5 rounded-md border border-surface-container-highest">
-                        <span className="material-symbols-outlined text-primary text-[14px]">auto_awesome</span>
-                        <span>AI Verified: {Math.round((item.aiAnalysis.confidence || 0.95) * 100)}% Match</span>
-                      </span>
-                    )}
-
-                    {item.assignedUniversity && (
-                      <span className="flex items-center gap-1 bg-tertiary-container/10 text-tertiary px-2.5 py-0.5 rounded-md border border-tertiary-container/30">
-                        <span className="material-symbols-outlined text-[14px]">school</span>
-                        <span>{item.assignedUniversity}</span>
-                      </span>
-                    )}
                   </div>
-
-                  <button className="flex items-center gap-1 text-primary group-hover:translate-x-1 transition-transform font-bold text-xs">
-                    <span>Track Audit Trail</span>
-                    <span className="material-symbols-outlined text-base">arrow_forward</span>
-                  </button>
+                  <span className="material-symbols-outlined text-secondary hover:text-primary text-xl">
+                    chevron_right
+                  </span>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }
-
-export default CitizenComplaints;

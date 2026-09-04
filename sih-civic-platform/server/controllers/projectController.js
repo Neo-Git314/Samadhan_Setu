@@ -274,11 +274,16 @@ export async function inviteIndustry(req, res, next) {
  */
 export async function respondIndustryInvitation(req, res, next) {
   try {
-    const { accepted } = req.body;
+    let accepted = req.body.accepted;
+    if (typeof accepted !== 'boolean') {
+      if (req.body.decision === 'accept') accepted = true;
+      else if (req.body.decision === 'decline') accepted = false;
+    }
+
     if (typeof accepted !== 'boolean') {
       return res.status(400).json({
         success: false,
-        message: 'accepted field must be boolean (true or false)'
+        message: 'accepted field (boolean) or decision ("accept" | "decline") is required'
       });
     }
 

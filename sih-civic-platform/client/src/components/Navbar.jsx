@@ -3,15 +3,15 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useToast } from '../context/ToastContext';
 import { getRoleBadgeInfo, getRoleDefaultRoute } from '../utils/rbac';
 
 function Navbar() {
-  const { user, isAuthenticated, logout, switchRoleDev } = useAuth();
+  const { user, isAuthenticated, logout, switchPersona } = useAuth();
   const { t } = useLanguage();
   const { increaseFont, decreaseFont, resetFont } = useTheme();
-  const { notifications } = useData();
+  const { unreadCount } = useNotifications();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,7 +21,7 @@ function Navbar() {
   const role = user?.role || 'citizen';
   const roleBadge = getRoleBadgeInfo(role);
 
-  const unreadNotifications = (notifications || []).filter((n) => !n.read).length;
+  const unreadNotifications = unreadCount;
 
   const handleLogout = () => {
     logout();
@@ -29,10 +29,14 @@ function Navbar() {
     navigate('/auth');
   };
 
-  const handleDevRoleSwitch = (newRole) => {
-    switchRoleDev(newRole);
-    showToast(`Role switched to: ${newRole}`, 'success');
-    navigate(getRoleDefaultRoute(newRole));
+  const handleDevRoleSwitch = async (newRole) => {
+    try {
+      await switchPersona(newRole);
+      showToast(`Authenticated as: ${newRole.toUpperCase()}`, 'success');
+      navigate(getRoleDefaultRoute(newRole));
+    } catch (err) {
+      showToast(`Failed to switch persona: ${err.message}`, 'error');
+    }
   };
 
   return (
