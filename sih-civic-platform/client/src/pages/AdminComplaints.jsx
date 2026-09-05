@@ -20,6 +20,7 @@ export default function AdminComplaints() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [districtFilter, setDistrictFilter] = useState('ALL');
+  const [trackFilter, setTrackFilter] = useState('ALL'); // 'ALL' | 'academic_innovation' | 'routine_municipal'
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'gis'
 
   // Selection & Batch Assignment
@@ -105,10 +106,14 @@ export default function AdminComplaints() {
         statusFilter === 'ALL' || c.status?.toLowerCase() === statusFilter.toLowerCase();
       const matchesDistrict =
         districtFilter === 'ALL' || c.district?.toLowerCase() === districtFilter.toLowerCase();
+      const matchesTrack =
+        trackFilter === 'ALL' ||
+        (trackFilter === 'routine_municipal' && c.resolutionTrack === 'routine_municipal') ||
+        (trackFilter === 'academic_innovation' && c.resolutionTrack !== 'routine_municipal');
 
-      return matchesSearch && matchesStatus && matchesDistrict;
+      return matchesSearch && matchesStatus && matchesDistrict && matchesTrack;
     });
-  }, [complaints, search, statusFilter, districtFilter]);
+  }, [complaints, search, statusFilter, districtFilter, trackFilter]);
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -164,71 +169,130 @@ export default function AdminComplaints() {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl p-4 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
-        <div className="relative flex-1 w-full">
-          <span className="material-symbols-outlined absolute left-3.5 top-2.5 text-secondary text-lg">search</span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by URN, keyword, complainant, or district..."
-            className="w-full bg-surface-container border border-surface-container-highest rounded-xl pl-10 pr-4 py-2 text-on-surface text-xs sm:text-sm focus:border-primary-container outline-none"
-          />
+      {/* Quick Filter Tabs & Search Bar */}
+      <div className="space-y-3">
+        {/* Dual-Track Triage Filter Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-container-highest pb-2.5">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-secondary font-bold text-[11px] uppercase tracking-wider mr-1">Triage Track:</span>
+            {[
+              { label: 'All Tracks', value: 'ALL' },
+              { label: '🎓 University R&D Tracks', value: 'academic_innovation' },
+              { label: '🚜 Direct Municipal Action', value: 'routine_municipal' }
+            ].map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setTrackFilter(tab.value)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  trackFilter === tab.value
+                    ? tab.value === 'routine_municipal'
+                      ? 'bg-amber-500 text-black shadow-sm'
+                      : 'bg-tertiary-container text-white shadow-sm'
+                    : 'bg-surface-container hover:bg-surface-container-high text-secondary hover:text-on-surface border border-surface-container-highest'
+                }`}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <span className="text-[11px] text-secondary">
+            Showing <strong className="text-on-surface font-bold">{filtered.length}</strong> challenges
+          </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-          {/* Status Dropdown */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-surface-container border border-surface-container-highest rounded-xl px-3 py-2 text-xs text-on-surface outline-none"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="assigned">Assigned</option>
-            <option value="in_progress">In Progress</option>
-            <option value="resolved">Resolved</option>
-            <option value="duplicate">Duplicate</option>
-          </select>
-
-          {/* District Dropdown */}
-          <select
-            value={districtFilter}
-            onChange={(e) => setDistrictFilter(e.target.value)}
-            className="bg-surface-container border border-surface-container-highest rounded-xl px-3 py-2 text-xs text-on-surface outline-none"
-          >
-            {districts.map((d) => (
-              <option key={d} value={d}>
-                {d === 'ALL' ? 'All Districts' : d}
-              </option>
-            ))}
-          </select>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-surface-container p-1 rounded-xl border border-surface-container-highest text-xs">
+        {/* Quick Status Filter Chips */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {[
+            { label: 'All Challenges', value: 'ALL' },
+            { label: 'Pending Triage', value: 'pending' },
+            { label: 'Assigned to HEI', value: 'assigned' },
+            { label: 'Active R&D', value: 'in_progress' },
+            { label: 'Resolved', value: 'resolved' },
+            { label: 'Marked False / Invalid', value: 'rejected' }
+          ].map((tab) => (
             <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 ${
-                viewMode === 'table'
-                  ? 'bg-surface-container-high text-on-surface font-bold shadow-sm'
-                  : 'text-secondary hover:text-on-surface'
+              key={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={`px-3.5 py-1.5 rounded-xl font-semibold transition-all ${
+                statusFilter === tab.value
+                  ? 'bg-primary-container text-white shadow-sm font-bold'
+                  : 'bg-surface-container hover:bg-surface-container-high text-secondary hover:text-on-surface border border-surface-container-highest'
               }`}
             >
-              <span className="material-symbols-outlined text-sm">table_rows</span>
-              <span>Table</span>
+              {tab.label}
             </button>
-            <button
-              onClick={() => setViewMode('gis')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 ${
-                viewMode === 'gis'
-                  ? 'bg-surface-container-high text-primary font-bold shadow-sm'
-                  : 'text-secondary hover:text-on-surface'
-              }`}
+          ))}
+        </div>
+
+        {/* Filter and Search Bar */}
+        <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl p-4 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
+          <div className="relative flex-1 w-full">
+            <span className="material-symbols-outlined absolute left-3.5 top-2.5 text-secondary text-lg">search</span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by URN, keyword, complainant, or district..."
+              className="w-full bg-surface-container border border-surface-container-highest rounded-xl pl-10 pr-4 py-2 text-on-surface text-xs sm:text-sm focus:border-primary-container outline-none"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            {/* Status Dropdown */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-surface-container border border-surface-container-highest rounded-xl px-3 py-2 text-xs text-on-surface outline-none"
             >
-              <span className="material-symbols-outlined text-sm">map</span>
-              <span>GIS Map</span>
-            </button>
+              <option value="ALL">All Statuses</option>
+              <option value="pending">Pending Triage</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="assigned">Assigned to HEI</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="duplicate">Duplicate</option>
+              <option value="rejected">Marked False / Invalid</option>
+            </select>
+
+            {/* District Dropdown */}
+            <select
+              value={districtFilter}
+              onChange={(e) => setDistrictFilter(e.target.value)}
+              className="bg-surface-container border border-surface-container-highest rounded-xl px-3 py-2 text-xs text-on-surface outline-none"
+            >
+              {districts.map((d) => (
+                <option key={d} value={d}>
+                  {d === 'ALL' ? 'All Districts' : d}
+                </option>
+              ))}
+            </select>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 bg-surface-container p-1 rounded-xl border border-surface-container-highest text-xs">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 ${
+                  viewMode === 'table'
+                    ? 'bg-surface-container-high text-on-surface font-bold shadow-sm'
+                    : 'text-secondary hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">table_rows</span>
+                <span>Table</span>
+              </button>
+              <button
+                onClick={() => setViewMode('gis')}
+                className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 ${
+                  viewMode === 'gis'
+                    ? 'bg-surface-container-high text-primary font-bold shadow-sm'
+                    : 'text-secondary hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">map</span>
+                <span>GIS Map</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -312,8 +376,13 @@ export default function AdminComplaints() {
                         <span className="text-[11px] text-secondary line-clamp-1">{c.description}</span>
                       </td>
 
-                      <td className="p-4 whitespace-nowrap text-secondary">
-                        {c.submittedBy?.name || 'Citizen'}
+                      <td className="p-4 whitespace-nowrap">
+                        <span className="font-semibold text-on-surface block">{c.submittedBy?.name || 'Citizen'}</span>
+                        {c.submitterType && (
+                          <span className="text-[10px] text-primary capitalize block">
+                            {c.submitterType.replace(/_/g, ' ')}
+                          </span>
+                        )}
                       </td>
 
                       <td className="p-4 whitespace-nowrap font-medium">
@@ -321,20 +390,50 @@ export default function AdminComplaints() {
                       </td>
 
                       <td className="p-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-primary-container/20 text-primary border border-primary-container/30">
-                          {c.urgency}
-                        </span>
+                        {c.surgeAlert || c.urgency === 'critical' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-500/20 text-red-300 border border-red-500/40 inline-flex items-center gap-1 animate-pulse">
+                            <span className="material-symbols-outlined text-[12px]">warning</span>
+                            <span>Critical / Surge</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-primary-container/20 text-primary border border-primary-container/30">
+                            {c.urgency}
+                          </span>
+                        )}
                       </td>
 
-                      <td className="p-4 whitespace-nowrap capitalize text-secondary">
-                        {c.category?.replace(/_/g, ' ')}
+                      <td className="p-4 whitespace-nowrap">
+                        <span className="capitalize text-on-surface font-semibold block">
+                          {c.category?.replace(/_/g, ' ')}
+                        </span>
+                        {c.resolutionTrack === 'routine_municipal' ? (
+                          <span
+                            className="text-[10px] text-amber-400 font-bold inline-flex items-center gap-0.5 mt-0.5"
+                            title={c.triageReason || 'Routine municipal maintenance'}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">handyman</span>
+                            <span>Direct Municipal</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] text-tertiary font-bold inline-flex items-center gap-0.5 mt-0.5"
+                            title={c.triageReason || 'NEP 2020 University Capstone R&D'}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">school</span>
+                            <span>University R&D</span>
+                          </span>
+                        )}
                       </td>
 
                       <td className="p-4 whitespace-nowrap">
                         <select
                           value={c.status}
                           onChange={(e) => handleStatusOverride(c._id, e.target.value, e)}
-                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-surface-container border border-surface-container-highest capitalize outline-none"
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border capitalize outline-none ${
+                            c.status === 'rejected'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                              : 'bg-surface-container border-surface-container-highest text-on-surface'
+                          }`}
                         >
                           <option value="pending">Pending</option>
                           <option value="reviewed">Reviewed</option>
@@ -342,6 +441,7 @@ export default function AdminComplaints() {
                           <option value="in_progress">In Progress</option>
                           <option value="resolved">Resolved</option>
                           <option value="duplicate">Duplicate</option>
+                          <option value="rejected">Mark False / Invalid</option>
                         </select>
                       </td>
 

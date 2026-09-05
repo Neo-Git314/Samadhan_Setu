@@ -75,13 +75,36 @@ const complaintSchema = new mongoose.Schema(
     },
     urgency: {
       type: String,
-      enum: ['low', 'medium', 'high'],
+      enum: ['low', 'medium', 'high', 'critical'],
       default: 'medium'
+    },
+    surgeAlert: {
+      type: Boolean,
+      default: false
+    },
+    submitterType: {
+      type: String,
+      enum: [
+        'Individual Citizen',
+        'Community Group / Self-Help Group (SHG)',
+        'Panchayati Raj Institution (Gram Panchayat / PRI)',
+        'Urban Local Body (Municipal Corporation / ULB)'
+      ],
+      default: 'Individual Citizen'
     },
     status: {
       type: String,
-      enum: ['pending', 'reviewed', 'assigned', 'in_progress', 'resolved', 'duplicate'],
+      enum: ['pending', 'reviewed', 'assigned', 'in_progress', 'resolved', 'duplicate', 'rejected'],
       default: 'pending'
+    },
+    resolutionTrack: {
+      type: String,
+      enum: ['academic_innovation', 'routine_municipal'],
+      default: 'academic_innovation'
+    },
+    triageReason: {
+      type: String,
+      default: ''
     },
     needsReview: {
       type: Boolean,
@@ -123,5 +146,6 @@ complaintSchema.index({ createdAt: -1 });
 complaintSchema.index({ submittedBy: 1 });
 complaintSchema.index({ assignedUniversity: 1 });
 complaintSchema.index({ duplicateOf: 1 });
+complaintSchema.index({ resolutionTrack: 1 });
 
 export default mongoose.models.Complaint || mongoose.model('Complaint', complaintSchema);

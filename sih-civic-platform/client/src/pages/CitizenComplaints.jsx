@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complaintsApi } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 import StatusBadge from '../components/StatusBadge';
 
 export default function CitizenComplaints() {
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [complaints, setComplaints] = useState([]);
@@ -24,11 +26,25 @@ export default function CitizenComplaints() {
       }
     } catch (err) {
       console.error('[CitizenComplaints] Fetch error:', err);
-      setError(err.message || 'Failed to fetch grievances');
+      setError(err.message || 'Failed to fetch societal challenges');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleDeleteComplaint = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to withdraw/delete "${title}"? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      await complaintsApi.deleteComplaint(id);
+      setComplaints((prev) => prev.filter((c) => c._id !== id));
+      showToast('Societal challenge withdrawn successfully', 'success');
+    } catch (err) {
+      console.error('[CitizenComplaints] Delete error:', err);
+      showToast(err.response?.data?.message || err.message || 'Failed to withdraw challenge', 'error');
+    }
+  };
 
   useEffect(() => {
     fetchMyComplaints();
@@ -70,14 +86,14 @@ export default function CitizenComplaints() {
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-semibold">
-            <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
-            <span>Government of Jharkhand — Citizen Grievance Portal</span>
+            <span className="material-symbols-outlined text-[16px]">school</span>
+            <span>समाधान सेतु — नागरिक नवाचार पोर्टल • SIH-2026 Problem #26043</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
-            Citizen Grievance Redressal Command
+            My Submitted Societal Challenges
           </h1>
           <p className="text-sm text-secondary max-w-2xl leading-relaxed">
-            Monitor municipal grievances across Jharkhand districts, inspect AI severity verification, and track real-time SLA remediation.
+            Monitor crowdsourced community challenges across Jharkhand districts, inspect AI triage verification, and track university R&D capstone adoption.
           </p>
         </div>
 
@@ -86,7 +102,7 @@ export default function CitizenComplaints() {
           className="px-6 py-3.5 bg-primary-container hover:bg-orange-600 active:scale-[0.98] text-white font-bold rounded-2xl shadow-md transition-all flex items-center gap-2.5 whitespace-nowrap shrink-0"
         >
           <span className="material-symbols-outlined text-xl">add_circle</span>
-          <span>Register Grievance</span>
+          <span>Submit Societal Challenge</span>
         </button>
       </div>
 
@@ -266,9 +282,9 @@ export default function CitizenComplaints() {
                   </p>
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-secondary pt-1">
-                    <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">location_on</span>
-                      <span>{c.district}, Jharkhand</span>
+                    <span className="flex items-center gap-1 max-w-[280px]">
+                      <span className="material-symbols-outlined text-sm text-primary shrink-0">location_on</span>
+                      <span className="truncate">{c.location?.address || `${c.district}, Jharkhand`}</span>
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-sm">calendar_today</span>
@@ -281,16 +297,30 @@ export default function CitizenComplaints() {
                   </div>
                 </div>
 
-                <div className="flex md:flex-col items-center md:items-end justify-between w-full md:w-auto shrink-0 gap-2 border-t md:border-t-0 border-surface-container-highest pt-3 md:pt-0">
+                <div className="flex md:flex-col items-center md:items-end justify-between w-full md:w-auto shrink-0 gap-3 border-t md:border-t-0 border-surface-container-highest pt-3 md:pt-0">
                   <div className="text-left md:text-right">
                     <span className="text-[11px] text-secondary block">Assigned University</span>
                     <span className="text-xs font-bold text-tertiary">
                       {c.assignedUniversity?.name || 'Pending Bidding'}
                     </span>
                   </div>
-                  <span className="material-symbols-outlined text-secondary hover:text-primary text-xl">
-                    chevron_right
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteComplaint(c._id, c.title);
+                      }}
+                      className="px-2.5 py-1 text-xs text-error hover:text-white bg-error/10 hover:bg-error border border-error/30 rounded-lg font-semibold flex items-center gap-1 transition-all"
+                      title="Withdraw Challenge"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                      <span>Withdraw</span>
+                    </button>
+                    <span className="material-symbols-outlined text-secondary hover:text-primary text-xl">
+                      chevron_right
+                    </span>
+                  </div>
                 </div>
               </div>
             );

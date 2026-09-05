@@ -1,6 +1,17 @@
 import axios from 'axios';
 
 const VALID_CATEGORIES = [
+  'Water Resources & Sanitation',
+  'Agriculture & Rural Livelihoods',
+  'Healthcare & Public Health',
+  'Education & Skill Development',
+  'Environment & Climate Action',
+  'Energy & Renewable Systems',
+  'Urban Infrastructure & Mobility',
+  'Accessibility & Assistive Tech',
+  'Public Administration & Governance',
+  'Other Local Societal Needs',
+  // Legacy aliases
   'education',
   'agriculture',
   'healthcare',
@@ -78,11 +89,35 @@ function heuristicClassify(text = '') {
     urgency = 'medium';
   }
 
+  let resolutionTrack = 'academic_innovation';
+  let triageReason = 'Complex societal problem suitable for Higher Education Institution (HEI) engineering research and student capstone under NEP 2020.';
+
+  // Routine municipal patterns: pothole, broken streetlight, garbage dump, handpump washer, routine pipeline burst, cleaning
+  if (
+    lower.includes('pothole') ||
+    lower.includes('handpump') ||
+    lower.includes('washer') ||
+    lower.includes('street light') ||
+    lower.includes('streetlight') ||
+    lower.includes('bulb') ||
+    lower.includes('clear drain') ||
+    lower.includes('clean drain') ||
+    lower.includes('garbage clearing') ||
+    lower.includes('trash') ||
+    lower.includes('potholes') ||
+    lower.includes('routine maintenance')
+  ) {
+    resolutionTrack = 'routine_municipal';
+    triageReason = 'Standard civic maintenance issue recommended for direct municipal field crew or DWSD remediation.';
+  }
+
   return {
     category,
     confidence: category === 'uncategorized' ? 0.3 : 0.85,
     urgency,
-    keywords
+    keywords,
+    resolutionTrack,
+    triageReason
   };
 }
 
@@ -109,7 +144,9 @@ export async function classifyComplaint(text) {
     category: 'uncategorized',
     confidence: 0,
     urgency: 'medium',
-    keywords: []
+    keywords: [],
+    resolutionTrack: 'academic_innovation',
+    triageReason: 'Default academic innovation pathway'
   };
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -117,10 +154,22 @@ export async function classifyComplaint(text) {
     return heuristicClassify(text);
   }
 
-  const prompt = `System: You are a classifier for civic complaints in Jharkhand, India.
-Categories: education, agriculture, healthcare, water_resources, environment, energy, urban_development, accessibility, public_administration, rural_livelihoods.
+  const prompt = `System: You are an autonomous AI triage engine for Samadhan Setu (Govt. of Jharkhand, SIH-2026 Problem #26043).
+Categories: Water Resources & Sanitation, Agriculture & Rural Livelihoods, Healthcare & Public Health, Education & Skill Development, Environment & Climate Action, Energy & Renewable Systems, Urban Infrastructure & Mobility, Accessibility & Assistive Tech, Public Administration & Governance, Other Local Societal Needs.
+
+You must evaluate dual-track triage:
+1. "routine_municipal": Standard civic maintenance, simple component repairs, or sanitation requiring immediate departmental field staff execution (e.g. broken handpump washer, pothole patch, garbage clearing, streetlight bulb replacement, clogged storm drain).
+2. "academic_innovation": Complex societal challenge requiring engineering design, IoT monitoring, prototype testing, sustainable materials, or multidisciplinary research under NEP 2020 by universities (e.g., heavy metal water filtration, smart agricultural frost detection, solar microgrid optimization, rural telemedicine kiosk, drone surveillance for forest fires).
+
 Given the complaint text below, return ONLY valid JSON:
-{ "category": "<one of the categories above>", "confidence": <0-1>, "urgency": "low" | "medium" | "high", "keywords": ["...", "..."] }
+{
+  "category": "<one of the categories above>",
+  "confidence": <0-1>,
+  "urgency": "low" | "medium" | "high" | "critical",
+  "keywords": ["...", "..."],
+  "resolutionTrack": "academic_innovation" | "routine_municipal",
+  "triageReason": "<one concise sentence justifying whether this requires routine municipal action or academic innovation>"
+}
 Complaint: "${text}"`;
 
   try {
@@ -144,13 +193,22 @@ Complaint: "${text}"`;
 
     if (parsed && parsed.category) {
       const normalizedCategory = parsed.category.toLowerCase().replace(/\s+/g, '_');
+      const track = ['routine_municipal', 'academic_innovation'].includes(parsed.resolutionTrack)
+        ? parsed.resolutionTrack
+        : heuristicClassify(text).resolutionTrack;
+      const reason = parsed.triageReason || (track === 'routine_municipal'
+        ? 'Direct Municipal Action: Operational civic maintenance identified.'
+        : 'Academic Innovation: Engineering design or applied research required under NEP 2020.');
+
       return {
         category: VALID_CATEGORIES.includes(normalizedCategory) ? normalizedCategory : 'uncategorized',
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.7,
-        urgency: ['low', 'medium', 'high'].includes(parsed.urgency?.toLowerCase())
+        urgency: ['low', 'medium', 'high', 'critical'].includes(parsed.urgency?.toLowerCase())
           ? parsed.urgency.toLowerCase()
           : 'medium',
-        keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
+        keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+        resolutionTrack: track,
+        triageReason: reason
       };
     }
 

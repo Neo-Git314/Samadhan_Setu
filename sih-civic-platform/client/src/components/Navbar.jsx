@@ -102,12 +102,12 @@ function Navbar() {
               <span className="text-lg sm:text-xl tracking-tight text-on-surface font-bold">
                 Samadhan Setu
               </span>
-              <span className="text-xs bg-primary-container/20 text-primary border border-primary-container/40 px-2 py-0.5 rounded-full font-code-num font-semibold">
-                Jharkhand
+              <span className="text-[10px] bg-primary-container/20 text-primary border border-primary-container/40 px-2 py-0.5 rounded-full font-semibold">
+                SIH-2026 #26043
               </span>
             </div>
-            <p className="text-xs text-secondary hidden sm:block">
-              {t('sub_brand', 'Government of Jharkhand • Grievance Redressal & Innovation Bridge')}
+            <p className="text-[11px] text-secondary hidden sm:block">
+              Dept of Higher & Technical Education • Aligned with NEP 2020 Framework
             </p>
           </div>
         </div>
@@ -128,7 +128,7 @@ function Navbar() {
                 }
               >
                 <span className="material-symbols-outlined text-[18px]">inbox</span>
-                <span>{t('nav_my_complaints', 'My Complaints')}</span>
+                <span>{t('nav_my_complaints', 'My Submitted Challenges')}</span>
               </NavLink>
               <NavLink
                 to="/citizen/submit"
@@ -141,7 +141,7 @@ function Navbar() {
                 }
               >
                 <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                <span>{t('nav_register', 'Register Grievance')}</span>
+                <span>{t('nav_register', 'Submit Societal Challenge')}</span>
               </NavLink>
             </>
           )}
@@ -160,7 +160,7 @@ function Navbar() {
                 }
               >
                 <span className="material-symbols-outlined text-[18px]">lightbulb</span>
-                <span>{t('nav_challenges', 'Civic Challenges')}</span>
+                <span>{t('nav_challenges', 'Community Challenges')}</span>
               </NavLink>
               <NavLink
                 to="/university/profile"
@@ -173,7 +173,7 @@ function Navbar() {
                 }
               >
                 <span className="material-symbols-outlined text-[18px]">school</span>
-                <span>{t('nav_uni_profile', 'University Profile')}</span>
+                <span>{t('nav_uni_profile', 'HEI R&D Profile')}</span>
               </NavLink>
             </>
           )}

@@ -4,6 +4,7 @@ import { classifyComplaint, analyzeImage, getEmbedding } from '../services/aiSer
 import { checkDuplicates } from '../services/dedupService.js';
 import { matchUniversities } from '../services/matchingService.js';
 import { notifyUser } from '../services/notificationService.js';
+import { haversine } from '../utils/haversine.js';
 
 /**
  * Background async pipeline for AI classification, image analysis, embedding,
@@ -23,6 +24,12 @@ async function runBackgroundComplaintProcessing(complaintId) {
         complaint.category = classResult.category;
         complaint.categoryConfidence = classResult.confidence || 0;
         complaint.urgency = classResult.urgency || 'medium';
+        if (classResult.resolutionTrack) {
+          complaint.resolutionTrack = classResult.resolutionTrack;
+        }
+        if (classResult.triageReason) {
+          complaint.triageReason = classResult.triageReason;
+        }
         if (complaint.categoryConfidence < 0.6) {
           complaint.needsReview = true;
         }
@@ -60,6 +67,33 @@ async function runBackgroundComplaintProcessing(complaintId) {
       console.error('[AI Processing] Embedding error:', err.message);
     }
 
+    // 3b. Spatial Cluster Surge Escalation (Check active challenges within 5.0km)
+    try {
+      if (complaint.location && complaint.location.lat && complaint.location.lng) {
+        const nearbyCandidates = await Complaint.find({
+          _id: { $ne: complaint._id },
+          status: { $nin: ['duplicate', 'rejected'] }
+        });
+        let nearbyCount = 0;
+        for (const candidate of nearbyCandidates) {
+          if (candidate.location && candidate.location.lat && candidate.location.lng) {
+            const dist = haversine(complaint.location, candidate.location);
+            if (dist <= 5.0) {
+              nearbyCount++;
+            }
+          }
+        }
+        if (nearbyCount >= 4) {
+          complaint.urgency = 'critical';
+          complaint.surgeAlert = true;
+        } else if (nearbyCount >= 2 && complaint.urgency !== 'critical') {
+          complaint.urgency = 'high';
+        }
+      }
+    } catch (err) {
+      console.error('[AI Processing] Spatial cluster surge calculation error:', err.message);
+    }
+
     // Save enriched complaint before dedup and matching
     await complaint.save();
 
@@ -80,7 +114,7 @@ async function runBackgroundComplaintProcessing(complaintId) {
  */
 export async function createComplaint(req, res, next) {
   try {
-    const { title, description, district } = req.body;
+    const { title, description, district, submitterType } = req.body;
 
     if (!title || !description || !district) {
       return res.status(400).json({
@@ -132,6 +166,7 @@ export async function createComplaint(req, res, next) {
       submittedBy: req.user.id,
       title: title.trim(),
       description: description.trim(),
+      submitterType: submitterType || 'Individual Citizen',
       location: {
         lat: Number(parsedLocation.lat) || 0,
         lng: Number(parsedLocation.lng) || 0,
@@ -180,7 +215,12 @@ export async function getComplaints(req, res, next) {
       }
     }
 
-    if (status) query.status = status;
+    if (status) {
+      query.status = status;
+    } else if (req.user.role !== 'admin') {
+      query.status = { $ne: 'rejected' };
+    }
+
     if (category) query.category = category;
     if (district) query.district = district;
 
@@ -274,8 +314,8 @@ export async function getComplaintDuplicates(req, res, next) {
  */
 export async function updateComplaintStatus(req, res, next) {
   try {
-    const { status } = req.body;
-    const validStatuses = ['pending', 'reviewed', 'assigned', 'in_progress', 'resolved', 'duplicate'];
+    const { status, resolutionTrack } = req.body;
+    const validStatuses = ['pending', 'reviewed', 'assigned', 'in_progress', 'resolved', 'duplicate', 'rejected'];
 
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -294,6 +334,9 @@ export async function updateComplaintStatus(req, res, next) {
 
     const oldStatus = complaint.status;
     complaint.status = status;
+    if (resolutionTrack && ['academic_innovation', 'routine_municipal'].includes(resolutionTrack)) {
+      complaint.resolutionTrack = resolutionTrack;
+    }
     await complaint.save();
 
     // Trigger notification if assigned or resolved
@@ -309,6 +352,41 @@ export async function updateComplaintStatus(req, res, next) {
     return res.status(200).json({
       success: true,
       complaint
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * DELETE /api/complaints/:id
+ * Citizen owner or Admin deletes/withdraws a complaint
+ */
+export async function deleteComplaint(req, res, next) {
+  try {
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+
+    const isOwner = complaint.submittedBy.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You can only withdraw or delete your own submissions'
+      });
+    }
+
+    await Complaint.findByIdAndDelete(req.params.id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Societal challenge withdrawn successfully'
     });
   } catch (error) {
     next(error);

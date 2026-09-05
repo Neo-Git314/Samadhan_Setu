@@ -17,6 +17,15 @@ import Notifications from './pages/Notifications';
 import AdminComplaints from './pages/AdminComplaints';
 import AdminDashboard from './pages/AdminDashboard';
 
+import { useAuth } from './context/AuthContext';
+import { getRoleDefaultRoute } from './utils/rbac';
+
+function RootRedirect() {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return <Navigate to={getRoleDefaultRoute(user?.role)} replace />;
+}
+
 function App() {
   return (
     <div className="min-h-screen bg-background font-sans text-on-surface flex flex-col selection:bg-primary-container selection:text-white">
@@ -24,8 +33,8 @@ function App() {
 
       <main className="flex-1 w-full max-w-container-max mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-all duration-200">
         <Routes>
-          {/* Default Root Redirect */}
-          <Route path="/" element={<Navigate to="/citizen/complaints" replace />} />
+          {/* Role-Aware Default Root Redirect */}
+          <Route path="/" element={<RootRedirect />} />
 
           {/* Authentication & Persona Login */}
           <Route path="/auth" element={<AuthPage />} />

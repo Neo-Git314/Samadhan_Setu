@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createComplaint,
+  deleteComplaint,
   getComplaintById,
   getComplaintDuplicates,
   getComplaints,
@@ -26,5 +27,8 @@ router.get('/:id', auth, getComplaintById);
 
 // Admin updates complaint status
 router.patch('/:id/status', auth, requireRole(['admin']), updateComplaintStatus);
+
+// Citizen owner or Admin deletes/withdraws complaint
+router.delete('/:id', auth, deleteComplaint);
 
 export default router;

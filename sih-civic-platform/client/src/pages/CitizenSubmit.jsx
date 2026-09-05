@@ -7,18 +7,23 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 const CATEGORIES = [
-  'Water Supply & Contamination',
-  'Roads & Public Infrastructure',
-  'Electricity & Grid Faults',
-  'Solid Waste & Sanitation',
-  'Public Health & Vector Control',
-  'Street Lighting & Pedestrian Safety'
+  'Water Resources & Sanitation',
+  'Agriculture & Rural Livelihoods',
+  'Healthcare & Public Health',
+  'Education & Skill Development',
+  'Environment & Climate Action',
+  'Energy & Renewable Systems',
+  'Urban Infrastructure & Mobility',
+  'Accessibility & Assistive Tech',
+  'Public Administration & Governance',
+  'Other Local Societal Needs'
 ];
 
 const SUBMITTER_PERSONAS = [
-  { id: 'individual', label: 'Individual Citizen', icon: 'person', desc: 'Private resident filing for personal or neighborhood concern' },
-  { id: 'pri', label: 'Panchayati Raj Institution (PRI)', icon: 'holiday_village', desc: 'Gram Panchayat Mukhiya, Ward Member, or Block Representative' },
-  { id: 'ulb', label: 'Urban Local Body (ULB)', icon: 'location_city', desc: 'Municipal Corporation, Municipality, or Notified Area Committee' }
+  { id: 'Individual Citizen', label: 'Individual Citizen', icon: 'person', desc: 'Private resident filing for personal or neighborhood concern' },
+  { id: 'Community Group / Self-Help Group (SHG)', label: 'Community Group / Self-Help Group (SHG)', icon: 'groups', desc: 'Local community organization, Mahila Mandal, or Youth Group' },
+  { id: 'Panchayati Raj Institution (Gram Panchayat / PRI)', label: 'Panchayati Raj Institution (Gram Panchayat / PRI)', icon: 'holiday_village', desc: 'Gram Panchayat Mukhiya, Ward Member, or Block Representative' },
+  { id: 'Urban Local Body (Municipal Corporation / ULB)', label: 'Urban Local Body (Municipal Corporation / ULB)', icon: 'location_city', desc: 'Municipal Corporation, Municipality, or Notified Area Committee' }
 ];
 
 const JHARKHAND_DISTRICTS = [
@@ -35,18 +40,13 @@ const JHARKHAND_DISTRICTS = [
 ];
 
 const JHARKHAND_DEPARTMENTS = [
+  'Department of Higher & Technical Education, Govt. of Jharkhand',
   'Drinking Water & Sanitation Department (DWSD), Govt. of Jharkhand',
   'Road Construction Department (RCD / PWD), Govt. of Jharkhand',
   'Jharkhand Bijli Vitran Nigam Limited (JBVNL)',
   'Ranchi Municipal Corporation (RMC) / UD&HD Jharkhand',
   'Health, Medical Education & Family Welfare Dept., Govt. of Jharkhand',
   'Rural Development & Panchayati Raj Dept., Govt. of Jharkhand'
-];
-
-const URGENCIES = [
-  { value: 'Critical 12h', dbUrgency: 'high', labelEn: 'Critical 12h SLA', desc: 'Immediate contamination, open high-voltage sparks, structural collapse' },
-  { value: 'High 48h', dbUrgency: 'high', labelEn: 'High Priority 48h SLA', desc: 'Blocked main drainage culvert, trench excavation without barriers' },
-  { value: 'Standard 5-day', dbUrgency: 'medium', labelEn: 'Standard 5-day SLA', desc: 'Garbage accumulation, routine road patch repairs' }
 ];
 
 // Custom pin for map picker
@@ -90,14 +90,13 @@ export default function CitizenSubmit() {
   const [currentStep, setCurrentStep] = useState(1);
 
   // Step 1: Submitter Persona & Category
-  const [submitterType, setSubmitterType] = useState('individual');
+  const [submitterType, setSubmitterType] = useState(SUBMITTER_PERSONAS[0].id);
   const [category, setCategory] = useState(CATEGORIES[0]);
 
-  // Step 2: Problem Details & Urgency
+  // Step 2: Problem Details
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [department, setDepartment] = useState(JHARKHAND_DEPARTMENTS[0]);
-  const [urgency, setUrgency] = useState(URGENCIES[0].value);
 
   // Step 3: Geotagging & Evidence
   const [district, setDistrict] = useState('Ranchi');
@@ -107,25 +106,54 @@ export default function CitizenSubmit() {
   const [lng, setLng] = useState(85.2799);
   const [rawFiles, setRawFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   // Step 4: Legal & Results
   const [declared, setDeclared] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedComplaint, setSubmittedComplaint] = useState(null);
 
+  // OpenStreetMap Nominatim reverse geocoding
+  const fetchAddressFromCoords = async (latitude, longitude) => {
+    setIsGeocoding(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, {
+        headers: { 'Accept-Language': 'en' }
+      });
+      const data = await res.json();
+      if (data && data.display_name) {
+        setAddress(data.display_name);
+        const matchDistrict = JHARKHAND_DISTRICTS.find((d) =>
+          data.display_name.toLowerCase().includes(d.toLowerCase())
+        );
+        if (matchDistrict) {
+          setDistrict(matchDistrict);
+        }
+      }
+    } catch (err) {
+      console.warn('[Geocoding] Nominatim lookup error:', err.message);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   // Device GPS
   const handleDetectGPS = () => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLat(Number(pos.coords.latitude.toFixed(6)));
-          setLng(Number(pos.coords.longitude.toFixed(6)));
+          const newLat = Number(pos.coords.latitude.toFixed(6));
+          const newLng = Number(pos.coords.longitude.toFixed(6));
+          setLat(newLat);
+          setLng(newLng);
+          fetchAddressFromCoords(newLat, newLng);
           showToast('GPS coordinates acquired from device sensor in Jharkhand', 'success');
         },
         (err) => {
           console.warn('[GPS] Geolocation error:', err.message);
           setLat(23.3629);
           setLng(85.3372);
+          fetchAddressFromCoords(23.3629, 85.3372);
           showToast('GPS sensor timed out. Set to Ranchi center coordinates.', 'info');
         },
         { timeout: 8000 }
@@ -133,6 +161,7 @@ export default function CitizenSubmit() {
     } else {
       setLat(23.3629);
       setLng(85.3372);
+      fetchAddressFromCoords(23.3629, 85.3372);
       showToast('Geolocation not supported by browser. Using default coordinates.', 'info');
     }
   };
@@ -166,17 +195,12 @@ export default function CitizenSubmit() {
     setIsSubmitting(true);
 
     try {
-      // Map UI urgency to backend enum ('low', 'medium', 'high')
-      const chosenUrgency = URGENCIES.find((u) => u.value === urgency);
-      const dbUrgency = chosenUrgency?.dbUrgency || 'high';
-
       // Build real multipart FormData
       const formData = new FormData();
       formData.append('title', title.trim());
       formData.append('description', description.trim());
       formData.append('district', district);
       formData.append('category', category);
-      formData.append('urgency', dbUrgency);
       formData.append('submitterType', submitterType);
       formData.append('department', department);
       formData.append(
@@ -184,7 +208,7 @@ export default function CitizenSubmit() {
         JSON.stringify({
           lat: Number(lat),
           lng: Number(lng),
-          address: `${address}, ${ward}, ${district}, Jharkhand`
+          address: address.trim() || `${ward}, ${district}, Jharkhand`
         })
       );
 
@@ -195,13 +219,14 @@ export default function CitizenSubmit() {
 
       const res = await complaintsApi.createComplaint(formData);
       if (res && res.success && res.complaint) {
-        setSubmittedComplaint(res.complaint);
-        showToast(
-          `Grievance registered successfully! URN: SAM-2026-${res.complaint._id.slice(-6).toUpperCase()}`,
-          'success'
-        );
+        const newId = res.complaint._id || res.complaint.id;
+        const urn = res.complaint.urn || `SAM-2026-${String(newId).slice(-6).toUpperCase()}`;
+        showToast(`Societal Challenge registered successfully! URN: ${urn}`, 'success');
+        
+        // Navigate directly to the newly created challenge dossier
+        navigate(`/complaints/${newId}`);
       } else {
-        throw new Error(res?.message || 'Server error creating complaint');
+        throw new Error(res?.message || 'Server error creating challenge');
       }
     } catch (err) {
       console.error('[CitizenSubmit] Submission failure:', err);
@@ -218,14 +243,14 @@ export default function CitizenSubmit() {
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-semibold">
-            <span className="material-symbols-outlined text-[16px]">edit_document</span>
-            <span>Government of Jharkhand — Civic Redressal Portal</span>
+            <span className="material-symbols-outlined text-[16px]">school</span>
+            <span>समाधान सेतु — नागरिक नवाचार पोर्टल • SIH-2026 Problem #26043</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-on-surface">
-            Register Civic Grievance
+            Submit Societal Challenge
           </h1>
           <p className="text-sm text-secondary">
-            AI Triage & Deduplication pipeline with automatic Academic R&D matching across 24 Jharkhand districts
+            Crowdsource community problems for applied R&D capstones across Jharkhand Higher Education Institutions (HEIs)
           </p>
         </div>
 
@@ -234,15 +259,15 @@ export default function CitizenSubmit() {
           className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-1.5 shrink-0"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
-          <span>My Complaints</span>
+          <span>Cancel & Discard</span>
         </button>
       </div>
 
       {/* 4-Step Progress Indicator */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { step: 1, label: '1. Submitter & Category', icon: 'account_tree' },
-          { step: 2, label: '2. Problem & Urgency', icon: 'description' },
+          { step: 1, label: '1. Submitter & Domain', icon: 'account_tree' },
+          { step: 2, label: '2. Problem & AI Triage', icon: 'auto_awesome' },
           { step: 3, label: '3. Geotag & Evidence', icon: 'location_on' },
           { step: 4, label: '4. Legal & Instant URN', icon: 'verified' }
         ].map((s) => {
@@ -391,33 +416,16 @@ export default function CitizenSubmit() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-2">
-                Resolution Urgency & SLA SLA Commitment *
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {URGENCIES.map((u) => {
-                  const isSelected = urgency === u.value;
-                  return (
-                    <div
-                      key={u.value}
-                      onClick={() => setUrgency(u.value)}
-                      className={`cursor-pointer p-4 rounded-2xl border transition-all ${
-                        isSelected
-                          ? 'bg-surface-container-high border-primary text-on-surface ring-2 ring-primary/30 shadow-sm'
-                          : 'bg-surface-container border-surface-container-highest text-secondary hover:bg-surface-container-high'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-xs">{u.labelEn}</span>
-                        {isSelected && (
-                          <span className="material-symbols-outlined text-primary text-base">check_circle</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] opacity-80 leading-snug">{u.desc}</p>
-                    </div>
-                  );
-                })}
+            {/* AI Triage & Cluster Surge Protocol Notice */}
+            <div className="p-4 rounded-2xl bg-surface-container-high/80 border border-primary/30 flex items-start gap-3.5 shadow-sm">
+              <span className="material-symbols-outlined text-primary text-2xl mt-0.5 shrink-0">auto_awesome</span>
+              <div className="space-y-1 text-xs">
+                <span className="font-bold text-on-surface block text-sm">
+                  Autonomous AI Triage & Cluster Surge Priority
+                </span>
+                <p className="text-secondary leading-relaxed">
+                  Under the SIH26043 framework, resolution priority is determined autonomously by Gemini NLP severity analysis and live 5km spatial density. Multiple reports from the same village/block automatically escalate priority to <strong className="text-primary font-semibold">Community Surge Alert</strong> without manual bias.
+                </p>
               </div>
             </div>
 
@@ -506,9 +514,17 @@ export default function CitizenSubmit() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-secondary uppercase tracking-wider mb-1.5">
-                Exact Street / Landmark Address *
-              </label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-bold text-secondary uppercase tracking-wider">
+                  Exact Street / Village Landmark Address *
+                </label>
+                {isGeocoding && (
+                  <span className="text-[11px] text-primary flex items-center gap-1 font-semibold animate-pulse">
+                    <span className="material-symbols-outlined text-xs animate-spin">sync</span>
+                    <span>Resolving address via OSM Nominatim...</span>
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={address}
@@ -542,15 +558,18 @@ export default function CitizenSubmit() {
                   className="w-full h-full"
                 >
                   <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                   <MapClickHandler
                     position={[lat, lng]}
                     onPositionChange={(newLat, newLng) => {
-                      setLat(Number(newLat.toFixed(6)));
-                      setLng(Number(newLng.toFixed(6)));
-                      showToast(`Pin moved to: ${newLat.toFixed(4)}, ${newLng.toFixed(4)}`, 'info');
+                      const rLat = Number(newLat.toFixed(6));
+                      const rLng = Number(newLng.toFixed(6));
+                      setLat(rLat);
+                      setLng(rLng);
+                      fetchAddressFromCoords(rLat, rLng);
+                      showToast(`Pin moved to: ${rLat.toFixed(4)}, ${rLng.toFixed(4)}`, 'info');
                     }}
                   />
                 </MapContainer>
@@ -559,6 +578,7 @@ export default function CitizenSubmit() {
               <div className="flex items-center gap-4 text-xs text-secondary font-mono">
                 <span>Lat: <strong className="text-on-surface">{lat}</strong></span>
                 <span>Lng: <strong className="text-on-surface">{lng}</strong></span>
+                {isGeocoding && <span className="text-primary text-[11px] font-sans">Fetching address...</span>}
               </div>
             </div>
 
@@ -727,7 +747,9 @@ export default function CitizenSubmit() {
 
                 <div className="space-y-2">
                   <span className="px-3 py-1 rounded-full bg-primary-container/20 text-primary border border-primary-container/40 text-xs font-bold font-mono">
-                    URN: SAM-2026-{submittedComplaint._id.slice(-6).toUpperCase()}
+                    URN: {submittedComplaint?._id
+                      ? `SAM-2026-${String(submittedComplaint._id).slice(-6).toUpperCase()}`
+                      : (submittedComplaint?.urn || 'SAM-2026-REGISTERED')}
                   </span>
                   <h3 className="text-xl sm:text-2xl font-bold text-on-surface">
                     Grievance Registered Successfully!
@@ -742,27 +764,29 @@ export default function CitizenSubmit() {
                   <div className="flex items-center justify-between">
                     <span className="text-secondary font-medium">Initial Status:</span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary font-bold capitalize">
-                      {submittedComplaint.status || 'Pending AI Verification'}
+                      {submittedComplaint?.status || 'Pending AI Verification'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-secondary font-medium">District Registry:</span>
-                    <strong className="text-on-surface">{submittedComplaint.district}</strong>
+                    <strong className="text-on-surface">{submittedComplaint?.district || district}</strong>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-secondary font-medium">Auto-Triaged Urgency:</span>
-                    <strong className="text-primary capitalize">{submittedComplaint.urgency}</strong>
+                    <strong className="text-primary capitalize">{submittedComplaint?.urgency || urgency}</strong>
                   </div>
                 </div>
 
                 <div className="flex justify-center gap-3 pt-2">
-                  <button
-                    onClick={() => navigate(`/complaints/${submittedComplaint._id}`)}
-                    className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
-                  >
-                    <span>View Official Dossier</span>
-                    <span className="material-symbols-outlined text-base">arrow_forward</span>
-                  </button>
+                  {submittedComplaint?._id && (
+                    <button
+                      onClick={() => navigate(`/complaints/${submittedComplaint._id}`)}
+                      className="px-6 py-3 bg-primary-container hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                    >
+                      <span>View Official Dossier</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => navigate('/citizen/complaints')}
                     className="px-5 py-3 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-xs font-bold text-secondary hover:text-on-surface rounded-xl transition-all"

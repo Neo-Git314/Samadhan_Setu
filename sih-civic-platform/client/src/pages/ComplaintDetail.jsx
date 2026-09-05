@@ -82,6 +82,8 @@ export default function ComplaintDetail() {
 
   const isResolved = complaint.status === 'resolved';
   const isAdmin = user?.role === 'admin';
+  const isOwner = complaint.submittedBy?._id === user?._id || complaint.submittedBy === user?._id || user?.role === 'citizen';
+  const canWithdraw = isOwner || isAdmin;
   const isDuplicate = complaint.status === 'duplicate' || Boolean(complaint.duplicateOf);
   const parentComplaintId = complaint.duplicateOf?._id || complaint.duplicateOf || duplicateInfo?.duplicateOf?._id;
   const parentComplaintUrn = duplicateInfo?.duplicateOf?.urn || (parentComplaintId ? `SAM-2026-${parentComplaintId.toString().slice(-6).toUpperCase()}` : 'PARENT-RECORD');
@@ -94,7 +96,7 @@ export default function ComplaintDetail() {
       const res = await complaintsApi.updateStatus(complaint._id, newStatus);
       if (res && res.success && res.complaint) {
         setComplaint(res.complaint);
-        showToast(`Complaint status updated to: ${newStatus.toUpperCase()}`, 'success');
+        showToast(`Challenge status updated to: ${newStatus.toUpperCase()}`, 'success');
       }
     } catch (err) {
       showToast(`Failed to update status: ${err.message}`, 'error');
@@ -103,8 +105,59 @@ export default function ComplaintDetail() {
     }
   };
 
+  const handleTrackChange = async (newTrack) => {
+    try {
+      setStatusUpdating(true);
+      const res = await complaintsApi.updateStatus(complaint._id, complaint.status, {
+        resolutionTrack: newTrack
+      });
+      if (res && res.success && res.complaint) {
+        setComplaint(res.complaint);
+        showToast(
+          `Resolution track updated to: ${newTrack === 'routine_municipal' ? 'Direct Municipal Action' : 'Academic Innovation (NEP 2020)'}`,
+          'success'
+        );
+      }
+    } catch (err) {
+      showToast(`Failed to update resolution track: ${err.message}`, 'error');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
+  const handleDispatchMunicipal = async () => {
+    try {
+      setStatusUpdating(true);
+      const res = await complaintsApi.updateStatus(complaint._id, 'in_progress', {
+        resolutionTrack: 'routine_municipal'
+      });
+      if (res && res.success && res.complaint) {
+        setComplaint(res.complaint);
+        showToast('Challenge dispatched to Municipal Field Division for operational remediation!', 'success');
+      }
+    } catch (err) {
+      showToast(`Dispatch failed: ${err.message}`, 'error');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to withdraw/delete this societal challenge ("${complaint.title}")? This action is permanent.`)) {
+      return;
+    }
+    try {
+      await complaintsApi.deleteComplaint(complaint._id);
+      showToast('Societal challenge withdrawn successfully', 'success');
+      navigate(user?.role === 'citizen' ? '/citizen/complaints' : '/admin/complaints');
+    } catch (err) {
+      console.error('[ComplaintDetail] Delete error:', err);
+      showToast(err.response?.data?.message || err.message || 'Failed to delete challenge', 'error');
+    }
+  };
+
   const handleExportPDF = () => {
-    showToast(`Official Jharkhand Govt Grievance Dossier [${urn}] exported (PDF)`, 'info');
+    showToast(`Official Jharkhand Govt Societal Innovation Dossier [${urn}] exported (PDF)`, 'info');
   };
 
   // Timeline steps
@@ -155,14 +208,27 @@ export default function ComplaintDetail() {
       {/* Top Breadcrumb & Controls */}
       <div className="flex flex-wrap justify-between items-center gap-4">
         <button
-          onClick={() => navigate(getRoleDefaultRoute(user?.role))}
+          onClick={() => {
+            if (window.history.length > 2) navigate(-1);
+            else navigate(user?.role === 'citizen' ? '/citizen/complaints' : user?.role === 'university' ? '/university/challenges' : '/admin/complaints');
+          }}
           className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-2"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
-          <span>Back to Portal</span>
+          <span>Back to Challenges</span>
         </button>
 
         <div className="flex flex-wrap items-center gap-3">
+          {canWithdraw && (
+            <button
+              onClick={handleDelete}
+              className="px-3.5 py-2 bg-error/10 hover:bg-error text-error hover:text-white border border-error/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <span className="material-symbols-outlined text-base">delete</span>
+              <span>Withdraw / Delete</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportPDF}
             className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-2"
@@ -181,12 +247,13 @@ export default function ComplaintDetail() {
                 onChange={(e) => handleStatusChange(e.target.value)}
                 className="px-3 py-1.5 bg-surface-container-high border border-primary text-primary text-xs font-bold rounded-xl outline-none"
               >
-                <option value="pending">Pending</option>
-                <option value="reviewed">Reviewed</option>
-                <option value="assigned">Assigned</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-                <option value="duplicate">Duplicate</option>
+                <option value="pending">Under Triage & Verification</option>
+                <option value="reviewed">Under Department Triage</option>
+                <option value="assigned">Adopted for University R&D</option>
+                <option value="in_progress">Prototyping & Field Testing</option>
+                <option value="resolved">Solution Deployed & Validated</option>
+                <option value="duplicate">Merged Duplicate</option>
+                <option value="rejected">Mark as False / Invalid</option>
               </select>
             </div>
           )}
@@ -239,6 +306,12 @@ export default function ComplaintDetail() {
                 {complaint.category?.replace(/_/g, ' ')}
               </span>
               <StatusBadge status={complaint.status} size="lg" />
+              {(complaint.surgeAlert || complaint.urgency === 'critical') && (
+                <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-bold rounded-lg flex items-center gap-1 animate-pulse">
+                  <span className="material-symbols-outlined text-xs">local_fire_department</span>
+                  <span>Community Surge Alert</span>
+                </span>
+              )}
               {complaint.needsReview && (
                 <span className="px-2.5 py-0.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 text-[11px] font-bold rounded-lg flex items-center gap-1">
                   <span className="material-symbols-outlined text-xs">flag</span>
@@ -392,6 +465,95 @@ export default function ComplaintDetail() {
 
         {/* Right 1 Col: AI Computer Vision & University Matching */}
         <div className="space-y-6">
+          {/* AI Dual-Track Triage Assessment Card */}
+          <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-surface-container-highest">
+              <span className="material-symbols-outlined text-primary text-2xl">fork_right</span>
+              <div>
+                <h3 className="font-bold text-on-surface text-sm">AI Dual-Track Triage Assessment</h3>
+                <p className="text-xs text-secondary">Municipal Action vs. Academic Innovation</p>
+              </div>
+            </div>
+
+            {complaint.resolutionTrack === 'routine_municipal' ? (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/40 rounded-2xl space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-amber-400 text-xl shrink-0 mt-0.5">handyman</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-300">
+                      Direct Municipal Action (Operational Maintenance)
+                    </h4>
+                    <p className="text-[11px] text-amber-200/80 leading-relaxed mt-0.5">
+                      Recommended for DWSD / Urban Local Body field team.
+                    </p>
+                  </div>
+                </div>
+
+                {complaint.triageReason && (
+                  <p className="text-[11px] text-secondary bg-surface-container-low p-2.5 rounded-xl border border-amber-500/20 italic">
+                    "{complaint.triageReason}"
+                  </p>
+                )}
+
+                {isAdmin && (
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={statusUpdating || complaint.status === 'in_progress'}
+                      onClick={handleDispatchMunicipal}
+                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-base">send</span>
+                      <span>Dispatch to Municipal Field Division</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={statusUpdating}
+                      onClick={() => handleTrackChange('academic_innovation')}
+                      className="w-full py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-secondary hover:text-on-surface font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-base">school</span>
+                      <span>Escalate to University R&D</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 bg-tertiary-container/10 border border-tertiary-container/30 rounded-2xl space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-tertiary text-xl shrink-0 mt-0.5">school</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#4edea3]">
+                      Academic Innovation Track (NEP 2020)
+                    </h4>
+                    <p className="text-[11px] text-secondary leading-relaxed mt-0.5">
+                      Matched with Higher Education Institutions for engineering capstone R&D and prototype deployment.
+                    </p>
+                  </div>
+                </div>
+
+                {complaint.triageReason && (
+                  <p className="text-[11px] text-secondary bg-surface-container-low p-2.5 rounded-xl border border-surface-container-highest italic">
+                    "{complaint.triageReason}"
+                  </p>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    disabled={statusUpdating}
+                    onClick={() => handleTrackChange('routine_municipal')}
+                    className="w-full py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest text-secondary hover:text-amber-400 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base">handyman</span>
+                    <span>Transfer to Routine Municipal Action</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* AI Intelligence Card */}
           <div className="bg-surface-container-low border border-primary-container/40 rounded-2xl sm:rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2.5 pb-3 border-b border-surface-container-highest">

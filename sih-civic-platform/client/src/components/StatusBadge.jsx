@@ -14,9 +14,8 @@ function StatusBadge({ status = 'pending', size = 'sm', className = '' }) {
   if (norm === 'resolved' || norm === 'done' || norm === 'completed' || norm === 'co-funded' || norm === 'approved') {
     badgeClasses = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-sm';
     dotClasses = 'bg-emerald-400';
-    if (norm === 'resolved') displayLabel = 'Resolved';
-    if (norm === 'completed') displayLabel = 'Completed';
-    if (norm === 'co-funded') displayLabel = 'Co-Funded';
+    if (norm === 'resolved' || norm === 'done' || norm === 'completed') displayLabel = 'Solution Deployed & Validated';
+    else if (norm === 'co-funded' || norm === 'approved') displayLabel = 'Industry Co-Funded';
   } else if (
     norm === 'in progress' ||
     norm === 'in_progress' ||
@@ -26,20 +25,30 @@ function StatusBadge({ status = 'pending', size = 'sm', className = '' }) {
   ) {
     badgeClasses = 'bg-sky-950/80 text-sky-300 border-sky-500/50 shadow-sm';
     dotClasses = 'bg-sky-400 animate-pulse';
-    if (norm === 'in_progress' || norm === 'in progress') displayLabel = 'In Progress';
-    if (norm === 'assigned') displayLabel = 'Assigned';
+    if (norm === 'assigned') displayLabel = 'Adopted for University R&D';
+    else displayLabel = 'Prototyping & Field Testing';
   } else if (
     norm === 'pending' ||
     norm === 'under review' ||
     norm === 'under_review' ||
     norm === 'review' ||
+    norm === 'reviewed' ||
     norm === 'submitted' ||
     norm === 'proposed'
   ) {
     badgeClasses = 'bg-amber-950/80 text-amber-300 border-amber-500/50 shadow-sm';
     dotClasses = 'bg-amber-400';
-    if (norm === 'under_review' || norm === 'under review') displayLabel = 'Under Review';
-    if (norm === 'pending') displayLabel = 'Pending';
+    if (norm === 'proposed') displayLabel = 'R&D Proposal Submitted';
+    else if (norm === 'reviewed') displayLabel = 'Under Department Triage';
+    else displayLabel = 'Under Triage & Verification';
+  } else if (norm === 'duplicate') {
+    badgeClasses = 'bg-yellow-950/80 text-yellow-300 border-yellow-500/50 shadow-sm';
+    dotClasses = 'bg-yellow-400';
+    displayLabel = 'Merged Duplicate';
+  } else if (norm === 'rejected' || norm === 'false' || norm === 'invalid') {
+    badgeClasses = 'bg-red-950/80 text-red-300 border-red-500/50 shadow-sm';
+    dotClasses = 'bg-red-400';
+    displayLabel = 'Marked False / Invalid';
   } else if (
     norm === 'critical' ||
     norm.includes('critical') ||
@@ -48,7 +57,7 @@ function StatusBadge({ status = 'pending', size = 'sm', className = '' }) {
   ) {
     badgeClasses = 'bg-rose-950/80 text-rose-300 border-rose-500/60 shadow-sm';
     dotClasses = 'bg-rose-400 animate-ping';
-    displayLabel = 'Critical SLA';
+    displayLabel = 'Critical Surge Priority';
   }
 
   const sizeClasses =

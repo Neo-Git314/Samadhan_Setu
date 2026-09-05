@@ -19,13 +19,13 @@ router.get('/', auth, getProjects);
 router.get('/:id', auth, getProjectById);
 
 // University updates milestones
-router.patch('/:id/milestones', auth, requireRole(['university']), updateMilestones);
+router.patch('/:id/milestones', auth, requireRole(['university', 'admin']), updateMilestones);
 
 // University manages project team
-router.patch('/:id/team', auth, requireRole(['university']), updateTeam);
+router.patch('/:id/team', auth, requireRole(['university', 'admin']), updateTeam);
 
 // University invites industry partner
-router.post('/:id/invite-industry', auth, requireRole(['university']), inviteIndustry);
+router.post('/:id/invite-industry', auth, requireRole(['university', 'admin']), inviteIndustry);
 
 // Industry partner accepts or declines invitation
 router.patch('/:id/industry-response', auth, requireRole(['industry']), respondIndustryInvitation);

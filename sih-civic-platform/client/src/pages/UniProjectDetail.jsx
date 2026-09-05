@@ -215,6 +215,8 @@ export default function UniProjectDetail() {
     ];
   }, [completedCount, project?.status]);
 
+  const isUniversity = user?.role === 'university' || user?.role === 'admin';
+
   if (loading) {
     return (
       <div className="py-20 text-center space-y-3">
@@ -231,10 +233,10 @@ export default function UniProjectDetail() {
         <h3 className="text-lg font-bold text-on-surface">Project Workspace Not Found</h3>
         <p className="text-xs text-secondary">{error || 'This project dossier is unavailable.'}</p>
         <button
-          onClick={() => navigate('/university/challenges')}
+          onClick={() => navigate(-1)}
           className="px-5 py-2.5 bg-tertiary-container text-white text-xs font-bold rounded-xl"
         >
-          Return to Challenges
+          Return to Previous Page
         </button>
       </div>
     );
@@ -249,11 +251,11 @@ export default function UniProjectDetail() {
       {/* Top Breadcrumb */}
       <div className="flex justify-between items-center">
         <button
-          onClick={() => navigate('/university/challenges')}
+          onClick={() => navigate(-1)}
           className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-1.5"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
-          <span>Back to Challenges</span>
+          <span>Back to Projects</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -471,16 +473,25 @@ export default function UniProjectDetail() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleMilestoneToggle(m._id, m.status)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                        isDone
-                          ? 'bg-surface-container hover:bg-surface-container-high text-secondary border border-surface-container-highest'
-                          : 'bg-primary-container hover:bg-orange-600 text-white shadow-sm'
-                      }`}
-                    >
-                      {isDone ? 'Mark Pending' : 'Mark as Done'}
-                    </button>
+                    {isUniversity ? (
+                      <button
+                        onClick={() => handleMilestoneToggle(m._id, m.status)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                          isDone
+                            ? 'bg-surface-container hover:bg-surface-container-high text-secondary border border-surface-container-highest'
+                            : 'bg-primary-container hover:bg-orange-600 text-white shadow-sm'
+                        }`}
+                      >
+                        {isDone ? 'Mark Pending' : 'Mark as Done'}
+                      </button>
+                    ) : (
+                      <span
+                        className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-surface-container text-secondary border border-surface-container-highest shrink-0"
+                        title="Only university R&D investigators can update milestone status"
+                      >
+                        {isDone ? 'Completed' : 'In Progress'}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -499,13 +510,15 @@ export default function UniProjectDetail() {
                 </p>
               </div>
 
-              <button
-                onClick={() => setTeamModalOpen(true)}
-                className="px-4 py-2 bg-tertiary-container hover:bg-[#009b6a] text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-base">person_add</span>
-                <span>Add Student Member</span>
-              </button>
+              {isUniversity && (
+                <button
+                  onClick={() => setTeamModalOpen(true)}
+                  className="px-4 py-2 bg-tertiary-container hover:bg-[#009b6a] text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-base">person_add</span>
+                  <span>Add Student Member</span>
+                </button>
+              )}
             </div>
 
             {project.team && project.team.length > 0 ? (
@@ -525,13 +538,15 @@ export default function UniProjectDetail() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleRemoveTeamMember(member._id)}
-                      className="p-1.5 text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
-                      title="Remove Member"
-                    >
-                      <span className="material-symbols-outlined text-base">delete</span>
-                    </button>
+                    {isUniversity && (
+                      <button
+                        onClick={() => handleRemoveTeamMember(member._id)}
+                        className="p-1.5 text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                        title="Remove Member"
+                      >
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -539,12 +554,14 @@ export default function UniProjectDetail() {
               <div className="p-6 bg-surface-container rounded-2xl text-center space-y-2 border border-surface-container-highest">
                 <span className="material-symbols-outlined text-3xl text-secondary opacity-50">group</span>
                 <p className="text-xs text-secondary">No student researchers registered on this team yet.</p>
-                <button
-                  onClick={() => setTeamModalOpen(true)}
-                  className="text-xs text-primary font-bold hover:underline"
-                >
-                  + Add First Student Member
-                </button>
+                {isUniversity && (
+                  <button
+                    onClick={() => setTeamModalOpen(true)}
+                    className="text-xs text-primary font-bold hover:underline"
+                  >
+                    + Add First Student Member
+                  </button>
+                )}
               </div>
             )}
           </div>

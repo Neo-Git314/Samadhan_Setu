@@ -72,8 +72,12 @@ export const complaintsApi = {
     const res = await api.post('/complaints', data);
     return res.data;
   },
-  updateStatus: async (id, status) => {
-    const res = await api.patch(`/complaints/${id}/status`, { status });
+  updateStatus: async (id, status, extra = {}) => {
+    const res = await api.patch(`/complaints/${id}/status`, { status, ...extra });
+    return res.data;
+  },
+  deleteComplaint: async (id) => {
+    const res = await api.delete(`/complaints/${id}`);
     return res.data;
   }
 };
@@ -83,12 +87,28 @@ export const universitiesApi = {
     const res = await api.get('/universities');
     return res.data;
   },
+  getProfile: async () => {
+    const res = await api.get('/universities/me');
+    return res.data;
+  },
+  updateProfile: async (data) => {
+    const res = await api.put('/universities/me', data);
+    return res.data;
+  },
   createUniversity: async (data) => {
     const res = await api.post('/universities', data);
     return res.data;
   },
-  getChallenges: async (universityId = 'me') => {
-    const res = await api.get(`/universities/${universityId}/challenges`);
+  getChallenges: async (universityId = 'me', params = {}) => {
+    let queryParams = {};
+    if (typeof params === 'boolean') {
+      queryParams = params ? { all: 'true' } : {};
+    } else if (typeof params === 'object') {
+      queryParams = params;
+    }
+    const res = await api.get(`/universities/${universityId}/challenges`, {
+      params: queryParams
+    });
     return res.data;
   },
   acceptChallenge: async (universityId, complaintId) => {

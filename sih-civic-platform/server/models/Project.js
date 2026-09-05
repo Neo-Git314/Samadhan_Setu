@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const teamMemberSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    role: { type: String, enum: ['student', 'faculty_mentor'], required: true }
+    role: { type: String, enum: ['student', 'faculty_mentor', 'researcher', 'lead'], default: 'student', required: true }
   },
   { _id: true }
 );

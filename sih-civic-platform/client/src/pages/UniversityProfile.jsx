@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { universitiesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -7,23 +9,83 @@ function UniversityProfile() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [institutionName, setInstitutionName] = useState(
-    user?.organization || 'Birla Institute of Technology, Mesra'
+    user?.organization || 'Birla Institute of Technology (BIT), Mesra'
   );
   const [aisheCode, setAisheCode] = useState(user?.aisheCode || 'U-0120');
-  const [nodalEmail, setNodalEmail] = useState(user?.email || 'anita@bitmesra.ac.in');
+  const [nodalEmail, setNodalEmail] = useState(user?.email || 'university@bitmesra.ac.in');
   const [researchDisciplines, setResearchDisciplines] = useState(
-    'Water Resources, Environmental Engineering, IoT Embedded Systems, Public Infrastructure'
+    'Water Resources & Sanitation, Urban Infrastructure & Mobility, Energy & Renewable Systems, Environment & Climate Action'
   );
+  const [researchKeywords, setResearchKeywords] = useState(
+    'hydrology, sensor networks, water filtration, smart metering, waste recovery'
+  );
+  const [incubationFacility, setIncubationFacility] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = (e) => {
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res = await universitiesApi.getProfile();
+        if (res && res.success && res.university) {
+          const u = res.university;
+          if (u.name) setInstitutionName(u.name);
+          if (u.contactEmail) setNodalEmail(u.contactEmail);
+          if (Array.isArray(u.disciplines) && u.disciplines.length > 0) {
+            setResearchDisciplines(u.disciplines.join(', '));
+          }
+          if (Array.isArray(u.researchKeywords) && u.researchKeywords.length > 0) {
+            setResearchKeywords(u.researchKeywords.join(', '));
+          }
+          if (typeof u.incubationFacility === 'boolean') {
+            setIncubationFacility(u.incubationFacility);
+          }
+        }
+      } catch (err) {
+        console.warn('[UniversityProfile] Fetch error, using cached defaults:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
+  }, []);
+
+  const handleSave = async (e) => {
     e.preventDefault();
-    showToast('University Profile updated and verified with AISHE registry', 'success');
+    setSaving(true);
+    try {
+      const disciplinesList = researchDisciplines.split(',').map((s) => s.trim()).filter(Boolean);
+      const keywordsList = researchKeywords.split(',').map((s) => s.trim()).filter(Boolean);
+      await universitiesApi.updateProfile({
+        name: institutionName,
+        contactEmail: nodalEmail,
+        disciplines: disciplinesList,
+        researchKeywords: keywordsList,
+        incubationFacility
+      });
+      showToast('University Profile updated and persisted to MongoDB with AISHE credentials', 'success');
+    } catch (err) {
+      console.error('[UniversityProfile] Save error:', err);
+      showToast(err.response?.data?.message || err.message || 'Failed to update profile', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
+      {/* Top Back Navigation Button */}
+      <button
+        onClick={() => navigate('/university/challenges')}
+        className="px-4 py-2 bg-surface-container hover:bg-surface-container-high border border-surface-container-highest rounded-xl text-xs font-semibold text-secondary hover:text-on-surface transition-all flex items-center gap-2"
+      >
+        <span className="material-symbols-outlined text-base">arrow_back</span>
+        <span>Back to Challenges</span>
+      </button>
+
       <div className="bg-surface-container-low border border-surface-container-highest rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm space-y-3">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-tertiary-container/20 text-tertiary flex items-center justify-center border border-tertiary-container/30 shrink-0">
@@ -31,10 +93,10 @@ function UniversityProfile() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-on-surface">
-              {t('nav_uni_profile', 'University Institutional Profile')}
+              {t('nav_uni_profile', 'Higher Education Institution (HEI) Institutional Profile')}
             </h1>
             <p className="text-xs sm:text-sm text-secondary mt-0.5">
-              Academic R&D Incubation and AISHE Verification Credentials
+              NEP 2020 Capstone R&D Lab Facilities, Research Keywords & AISHE Verification
             </p>
           </div>
         </div>

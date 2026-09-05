@@ -4,6 +4,7 @@ import { universitiesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
+import StatusBadge from '../components/StatusBadge';
 
 export default function UniChallenges() {
   const { user } = useAuth();
@@ -11,10 +12,13 @@ export default function UniChallenges() {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState('assigned'); // 'assigned' | 'open'
   const [challenges, setChallenges] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [university, setUniversity] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAllOpen, setShowAllOpen] = useState(false);
 
   // Accept Challenge Modal
   const [selectedChallenge, setSelectedChallenge] = useState(null);
@@ -37,11 +41,15 @@ export default function UniChallenges() {
         setUniversity(currentUni);
       }
 
-      // 2. Fetch challenges matched to this university (or 'me')
+      // 2. Fetch challenges matched to this university based on activeTab
       const uniId = currentUni?._id || 'me';
-      const chalRes = await universitiesApi.getChallenges(uniId);
+      const chalRes = await universitiesApi.getChallenges(uniId, {
+        tab: activeTab,
+        all: showAllOpen ? 'true' : 'false'
+      });
       if (chalRes && chalRes.success) {
         setChallenges(chalRes.challenges || []);
+        setProjects(chalRes.projects || []);
       }
     } catch (err) {
       console.error('[UniChallenges] Load error:', err);
@@ -49,7 +57,7 @@ export default function UniChallenges() {
     } finally {
       setLoading(false);
     }
-  }, [user?._id]);
+  }, [user?._id, activeTab, showAllOpen]);
 
   useEffect(() => {
     loadUniversityData();
@@ -82,11 +90,20 @@ export default function UniChallenges() {
     }
   };
 
-  const categories = ['ALL', 'water_resources', 'environment', 'energy', 'urban_development', 'education'];
+  const categories = [
+    'ALL',
+    'Water Resources & Sanitation',
+    'Agriculture & Rural Livelihoods',
+    'Healthcare & Public Health',
+    'Education & Skill Development',
+    'Environment & Climate Action',
+    'Energy & Renewable Systems',
+    'Urban Infrastructure & Mobility'
+  ];
 
   const filteredChallenges = challenges.filter((c) => {
     if (filterCategory === 'ALL') return true;
-    return (c.category || '').toLowerCase() === filterCategory.toLowerCase();
+    return (c.category || '').toLowerCase().includes(filterCategory.toLowerCase().split(' ')[0]);
   });
 
   return (
@@ -96,13 +113,13 @@ export default function UniChallenges() {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-tertiary-container/20 text-tertiary border border-tertiary-container/40 text-xs font-semibold">
             <span className="material-symbols-outlined text-[16px]">school</span>
-            <span>Jharkhand State University Innovation & Capstone Portal</span>
+            <span>Higher Education Institutions (HEIs) & Capstone R&D Portal • SIH26043</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
-            Municipal Problem Statements & Civic Challenges
+            Community Societal Challenges & R&D Adoption Matrix
           </h1>
           <p className="text-sm text-secondary max-w-2xl leading-relaxed">
-            Apply applied engineering, IoT telemetry, and environmental research to solve verified citizen grievances with state CSR seed co-funding.
+            Aligned with the NEP 2020 Experiential Learning Framework: Higher Education Institutions adopt crowdsourced civic challenges for student engineering capstones and faculty applied research.
           </p>
         </div>
 
@@ -123,28 +140,86 @@ export default function UniChallenges() {
         </div>
       </div>
 
-      {/* Category Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setFilterCategory(cat)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap capitalize ${
-              filterCategory === cat
-                ? 'bg-tertiary-container text-white font-bold shadow-sm'
-                : 'bg-surface-container-low border border-surface-container-highest text-secondary hover:text-on-surface'
-            }`}
-          >
-            {cat.replace(/_/g, ' ')}
-          </button>
-        ))}
+      {/* Primary Mode Navigation: Adopted Projects vs. Explore Open Challenges */}
+      <div className="flex border-b border-surface-container-highest gap-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('assigned')}
+          className={`pb-3 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'assigned'
+              ? 'border-tertiary text-tertiary'
+              : 'border-transparent text-secondary hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">school</span>
+          <span>🎓 Our Adopted R&D Projects</span>
+          {activeTab === 'assigned' && challenges.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-tertiary-container/20 text-tertiary text-[11px] font-mono">
+              {challenges.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('open')}
+          className={`pb-3 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'open'
+              ? 'border-tertiary text-tertiary'
+              : 'border-transparent text-secondary hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">travel_explore</span>
+          <span>🔍 Explore Open Societal Challenges</span>
+          {activeTab === 'open' && challenges.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary text-[11px] font-mono">
+              {challenges.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Challenges Grid */}
+      {/* Category Filters & Open Challenge Toggle (Only on Open Tab) */}
+      {activeTab === 'open' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap capitalize ${
+                  filterCategory === cat
+                    ? 'bg-tertiary-container text-white font-bold shadow-sm'
+                    : 'bg-surface-container-low border border-surface-container-highest text-secondary hover:text-on-surface'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAllOpen(!showAllOpen)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border ${
+              showAllOpen
+                ? 'bg-tertiary-container text-white border-tertiary shadow-sm'
+                : 'bg-surface-container-low border-surface-container-highest text-secondary hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">
+              {showAllOpen ? 'check_box' : 'check_box_outline_blank'}
+            </span>
+            <span>Show All Open Civic Challenges</span>
+          </button>
+        </div>
+      )}
+
+      {/* Challenges / Projects Grid */}
       {loading ? (
         <div className="py-20 text-center space-y-3">
           <div className="inline-block w-8 h-8 border-4 border-tertiary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs text-secondary">Matching civic challenges against university research profile...</p>
+          <p className="text-xs text-secondary">Loading academic innovation workspace telemetry...</p>
         </div>
       ) : error ? (
         <div className="p-8 bg-surface-container-low border border-red-500/40 rounded-2xl text-center space-y-3">
@@ -154,18 +229,111 @@ export default function UniChallenges() {
             onClick={loadUniversityData}
             className="px-4 py-2 bg-tertiary-container text-white text-xs font-bold rounded-xl"
           >
-            Retry Matching
+            Retry Loading
           </button>
         </div>
       ) : filteredChallenges.length === 0 ? (
         <div className="p-12 bg-surface-container-low border border-surface-container-highest rounded-2xl text-center space-y-3">
-          <span className="material-symbols-outlined text-5xl text-secondary opacity-40">science</span>
-          <h3 className="text-base font-bold text-on-surface">No Unassigned Challenges</h3>
-          <p className="text-xs text-secondary max-w-sm mx-auto">
-            All current civic challenges matching your engineering disciplines have been assigned or resolved.
+          <span className="material-symbols-outlined text-5xl text-secondary opacity-40">
+            {activeTab === 'assigned' ? 'school' : 'science'}
+          </span>
+          <h3 className="text-base font-bold text-on-surface">
+            {activeTab === 'assigned' ? 'No Adopted R&D Projects Yet' : 'No Open Challenges Available'}
+          </h3>
+          <p className="text-xs text-secondary max-w-md mx-auto">
+            {activeTab === 'assigned'
+              ? "Your institution has not formally adopted any community challenges yet. Switch to 'Explore Open Challenges' to adopt a problem statement and initiate student capstones."
+              : 'All current civic challenges matching your engineering disciplines have been adopted or resolved.'}
           </p>
+          {activeTab === 'assigned' && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('open')}
+              className="px-4 py-2 bg-tertiary-container text-white text-xs font-bold rounded-xl shadow"
+            >
+              Explore Open Challenges
+            </button>
+          )}
+        </div>
+      ) : activeTab === 'assigned' ? (
+        /* Tab 1: Our Adopted R&D Projects Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredChallenges.map((challenge) => {
+            const matchingProject = projects.find(
+              (p) => String(p.complaintId?._id || p.complaintId) === String(challenge._id)
+            );
+            const urn = challenge.urn || `SAM-2026-${challenge._id.slice(-6).toUpperCase()}`;
+            const address = challenge.location?.address || `${challenge.district}, Jharkhand`;
+
+            return (
+              <div
+                key={challenge._id}
+                className="bg-surface-container-low hover:bg-surface-container border border-surface-container-highest hover:border-tertiary-container/60 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-sm transition-all flex flex-col justify-between space-y-5"
+              >
+                <div className="space-y-3">
+                  <div className="flex flex-wrap justify-between items-start gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-surface-container text-primary font-mono text-xs font-bold rounded-lg border border-surface-container-highest">
+                        {urn}
+                      </span>
+                      <span className="px-2.5 py-1 bg-tertiary-container/15 text-tertiary border border-tertiary-container/30 text-xs font-bold rounded-lg capitalize">
+                        {challenge.category?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    <StatusBadge status={matchingProject?.status || challenge.status} size="md" />
+                  </div>
+
+                  <h3
+                    onClick={() => navigate(`/university/projects/${matchingProject?._id || challenge._id}`)}
+                    className="text-lg sm:text-xl font-bold text-on-surface hover:text-tertiary cursor-pointer transition-colors leading-snug"
+                  >
+                    {challenge.title}
+                  </h3>
+
+                  <p className="text-xs sm:text-sm text-secondary line-clamp-3 leading-relaxed">
+                    {challenge.description}
+                  </p>
+
+                  <div className="space-y-1 text-xs text-secondary pt-2 border-t border-surface-container-highest/60">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="material-symbols-outlined text-sm text-secondary">person</span>
+                      <span className="truncate">
+                        Submitted by: <strong className="text-on-surface">{challenge.submittedBy?.name || 'Citizen'}</strong>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="material-symbols-outlined text-sm text-primary">location_on</span>
+                      <span className="truncate">{address}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-surface-container-highest">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/complaints/${challenge._id}`)}
+                    className="text-xs font-semibold text-secondary hover:text-on-surface flex items-center gap-1"
+                  >
+                    <span>Inspect Dossier</span>
+                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/university/projects/${matchingProject?._id || challenge._id}`)}
+                    className="px-4 py-2 bg-tertiary-container hover:bg-[#009b6a] text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base">rocket_launch</span>
+                    <span>Open Project Workspace</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
+        /* Tab 2: Explore Open Societal Challenges Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredChallenges.map((challenge) => {
             // Find AI score for this university
